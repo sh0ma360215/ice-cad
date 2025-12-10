@@ -2,7 +2,6 @@ import { useState, useRef } from 'react'
 import MoldPreview from './components/MoldPreview'
 import Drawing2D, { Drawing2DHandle } from './components/Drawing2D'
 import TextInput from './components/TextInput'
-import ParameterSliders from './components/ParameterSliders'
 import { FIXED_PARAMS, VariableParams, defaultVariableParams } from './constants'
 
 function App() {
@@ -178,6 +177,42 @@ function App() {
                          [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4
                          [&::-webkit-slider-thumb]:bg-cyan-500 [&::-webkit-slider-thumb]:rounded-full"
             />
+          </div>
+
+          {/* 文字埋め処理 */}
+          <div className="border-t border-gray-700 pt-3 mt-3">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-gray-400 text-sm">文字埋め処理</span>
+              <label className="relative inline-flex items-center cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={params.fillText}
+                  onChange={(e) => updateParam('fillText', e.target.checked)}
+                  className="sr-only peer"
+                />
+                <div className="w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-cyan-500"></div>
+              </label>
+            </div>
+            {params.fillText && (
+              <div>
+                <div className="flex justify-between text-sm mb-1">
+                  <span className="text-gray-400">オフセット距離</span>
+                  <span className="text-cyan-400 font-mono">{params.fillOffset}mm</span>
+                </div>
+                <input
+                  type="range"
+                  min={1}
+                  max={10}
+                  step={0.5}
+                  value={params.fillOffset}
+                  onChange={(e) => updateParam('fillOffset', parseFloat(e.target.value))}
+                  className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer
+                             [&::-webkit-slider-thumb]:appearance-none
+                             [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4
+                             [&::-webkit-slider-thumb]:bg-cyan-500 [&::-webkit-slider-thumb]:rounded-full"
+                />
+              </div>
+            )}
           </div>
         </div>
 

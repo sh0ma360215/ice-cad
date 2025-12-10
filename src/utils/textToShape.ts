@@ -1,11 +1,15 @@
 import * as THREE from 'three'
 import opentype from 'opentype.js'
+import { Clipper, Path64, Paths64, FillRule, JoinType, EndType } from 'clipper2-js'
 
 let cachedFont: opentype.Font | null = null
 let fontLoadPromise: Promise<opentype.Font> | null = null
 
 // Noto Sans JP Bold (ローカルファイル)
 const FONT_URL = '/fonts/NotoSansJP-Bold.otf'
+
+// Clipperは整数座標を使用するためスケール係数
+const CLIPPER_SCALE = 1000
 
 export async function loadFont(): Promise<opentype.Font> {
   if (cachedFont) return cachedFont
@@ -222,5 +226,261 @@ export function getTextBounds(
     yMin: -bbox.y2, // Y軸反転
     xMax: bbox.x2,
     yMax: -bbox.y1  // Y軸反転
+  }
+}
+
+// ===============================
+// 文字埋め処理（Clipper2を使用）
+// ===============================
+
+// THREE.Shape配列をClipperのPaths64形式に変換
+function shapesToClipperPaths(shapes: THREE.Shape[], offsetX: number = 0, offsetY: number = 0): Paths64 {
+  const paths = new Paths64()
+
+  for (const shape of shapes) {
+    // 外側輪郭
+    const outerPath = new Path64()
+    const points = shape.getPoints(20)
+    for (const p of points) {
+      outerPath.push({
+        x: Math.round((p.x + offsetX) * CLIPPER_SCALE),
+        y: Math.round((p.y + offsetY) * CLIPPER_SCALE)
+      })
+    }
+    if (outerPath.length > 2) {
+      paths.push(outerPath)
+    }
+
+    // 穴
+    for (const hole of shape.holes) {
+      const holePath = new Path64()
+      const holePoints = hole.getPoints(20)
+      for (const p of holePoints) {
+        holePath.push({
+          x: Math.round((p.x + offsetX) * CLIPPER_SCALE),
+          y: Math.round((p.y + offsetY) * CLIPPER_SCALE)
+        })
+      }
+      if (holePath.length > 2) {
+        paths.push(holePath)
+      }
+    }
+  }
+
+  return paths
+}
+
+// ClipperのPaths64形式をTHREE.Shape配列に変換
+function clipperPathsToShapes(paths: Paths64): THREE.Shape[] {
+  if (!paths || paths.length === 0) return []
+
+  // パスを外側/内側に分類
+  const pathsWithArea: { path: Path64; signedArea: number; absArea: number; isOuter: boolean }[] = []
+
+  for (const path of paths) {
+    if (path.length < 3) continue
+
+    // 符号付き面積を計算（Shoelace formula）
+    let signedArea = 0
+    for (let i = 0; i < path.length; i++) {
+      const p1 = path[i]
+      const p2 = path[(i + 1) % path.length]
+      signedArea += (p1.x * p2.y - p2.x * p1.y)
+    }
+    signedArea /= 2
+
+    // Clipper2では正の面積が外側（反時計回り）
+    pathsWithArea.push({
+      path,
+      signedArea,
+      absArea: Math.abs(signedArea),
+      isOuter: signedArea > 0  // 正の面積が外側輪郭
+    })
+  }
+
+  console.log('Clipper paths analysis:', pathsWithArea.map(p => ({
+    points: p.path.length,
+    signedArea: p.signedArea / (CLIPPER_SCALE * CLIPPER_SCALE),
+    isOuter: p.isOuter
+  })))
+
+  // 外側パスを面積で降順ソート
+  const outerPaths = pathsWithArea.filter(p => p.isOuter).sort((a, b) => b.absArea - a.absArea)
+  const innerPaths = pathsWithArea.filter(p => !p.isOuter)
+
+  console.log(`Outer paths: ${outerPaths.length}, Inner paths: ${innerPaths.length}`)
+
+  const shapes: THREE.Shape[] = []
+
+  for (const outer of outerPaths) {
+    const shape = new THREE.Shape()
+
+    // 外側輪郭（スケールを戻す）
+    shape.moveTo(outer.path[0].x / CLIPPER_SCALE, outer.path[0].y / CLIPPER_SCALE)
+    for (let i = 1; i < outer.path.length; i++) {
+      shape.lineTo(outer.path[i].x / CLIPPER_SCALE, outer.path[i].y / CLIPPER_SCALE)
+    }
+    shape.closePath()
+
+    // この外側に含まれる穴を探す
+    for (const inner of innerPaths) {
+      if (isPointInPath64(inner.path[0], outer.path)) {
+        const holePath = new THREE.Path()
+        holePath.moveTo(inner.path[0].x / CLIPPER_SCALE, inner.path[0].y / CLIPPER_SCALE)
+        for (let i = 1; i < inner.path.length; i++) {
+          holePath.lineTo(inner.path[i].x / CLIPPER_SCALE, inner.path[i].y / CLIPPER_SCALE)
+        }
+        holePath.closePath()
+        shape.holes.push(holePath)
+      }
+    }
+
+    shapes.push(shape)
+  }
+
+  return shapes
+}
+
+// 点がパス内にあるか判定（整数座標用）
+function isPointInPath64(point: { x: number; y: number }, polygon: Path64): boolean {
+  let inside = false
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].x, yi = polygon[i].y
+    const xj = polygon[j].x, yj = polygon[j].y
+
+    if (((yi > point.y) !== (yj > point.y)) &&
+        (point.x < (xj - xi) * (point.y - yi) / (yj - yi) + xi)) {
+      inside = !inside
+    }
+  }
+  return inside
+}
+
+// 文字を埋めた形状を生成（単一文字用）
+export function createFilledTextShapes(
+  font: opentype.Font,
+  text: string,
+  fontSize: number,
+  offsetDistance: number = 3,  // 膨張距離（mm）
+  minHoleArea: number = 100    // 小さな穴を除去する閾値
+): THREE.Shape[] {
+  // 1. 文字のパスを取得
+  const textShapes = textToShapes(font, text, fontSize)
+  if (textShapes.length === 0) return []
+
+  // 2. ClipperのPaths64形式に変換
+  const clipperPaths = shapesToClipperPaths(textShapes)
+  if (clipperPaths.length === 0) return textShapes
+
+  try {
+    // 3. パスをオフセット（膨張）- スケーリング済みなのでoffsetDistanceもスケール
+    const scaledOffset = Math.round(offsetDistance * CLIPPER_SCALE)
+    const inflatedPaths = Clipper.InflatePaths(
+      clipperPaths,
+      scaledOffset,
+      JoinType.Round,
+      EndType.Polygon
+    )
+
+    // 4. 全パスを統合（Union）
+    const unitedPaths = Clipper.Union(
+      inflatedPaths,
+      undefined,
+      FillRule.NonZero
+    )
+
+    // 5. 小さな穴を除去（スケーリング済みの面積閾値）
+    const scaledMinArea = minHoleArea * CLIPPER_SCALE * CLIPPER_SCALE
+    const filteredPaths = new Paths64()
+
+    for (const path of unitedPaths) {
+      let area = 0
+      for (let i = 0; i < path.length; i++) {
+        const p1 = path[i]
+        const p2 = path[(i + 1) % path.length]
+        area += p1.x * p2.y - p2.x * p1.y
+      }
+      area = Math.abs(area / 2)
+
+      // 外側パス、または十分大きな穴のみ保持
+      if (area >= scaledMinArea || area > scaledMinArea * 0.1) {
+        filteredPaths.push(path)
+      }
+    }
+
+    // 6. THREE.Shapeに戻す
+    return clipperPathsToShapes(filteredPaths.length > 0 ? filteredPaths : unitedPaths)
+  } catch (err) {
+    console.error('Clipper processing failed:', err)
+    return textShapes  // エラー時は元のシェイプを返す
+  }
+}
+
+// 複数文字をまとめて埋めた形状を生成（文字間も統合）
+export function createFilledMultiCharShapes(
+  font: opentype.Font,
+  chars: string[],
+  fontSize: number,
+  charPositions: { x: number; y: number }[],  // 各文字の位置
+  offsetDistance: number = 3,
+  minHoleArea: number = 100
+): THREE.Shape[] {
+  if (chars.length === 0) return []
+
+  // 全文字のパスを収集（Paths64形式）
+  const allPaths = new Paths64()
+
+  chars.forEach((char, index) => {
+    const shapes = textToShapes(font, char, fontSize)
+    const pos = charPositions[index]
+
+    // 位置オフセット込みでPaths64に変換
+    const charPaths = shapesToClipperPaths(shapes, pos.x, pos.y)
+    for (const path of charPaths) {
+      allPaths.push(path)
+    }
+  })
+
+  if (allPaths.length === 0) return []
+
+  try {
+    // パスをオフセット（膨張）- スケーリング済み
+    const scaledOffset = Math.round(offsetDistance * CLIPPER_SCALE)
+    const inflatedPaths = Clipper.InflatePaths(
+      allPaths,
+      scaledOffset,
+      JoinType.Round,
+      EndType.Polygon
+    )
+
+    // 全パスを統合（Union）- 文字間も統合される
+    const unitedPaths = Clipper.Union(
+      inflatedPaths,
+      undefined,
+      FillRule.NonZero
+    )
+
+    // 小さな穴を除去（スケーリング済みの面積閾値）
+    const scaledMinArea = minHoleArea * CLIPPER_SCALE * CLIPPER_SCALE
+    const filteredPaths = new Paths64()
+
+    for (const path of unitedPaths) {
+      let area = 0
+      for (let i = 0; i < path.length; i++) {
+        const p1 = path[i]
+        const p2 = path[(i + 1) % path.length]
+        area += p1.x * p2.y - p2.x * p1.y
+      }
+      area = Math.abs(area / 2)
+
+      if (area >= scaledMinArea || area > scaledMinArea * 0.1) {
+        filteredPaths.push(path)
+      }
+    }
+
+    return clipperPathsToShapes(filteredPaths.length > 0 ? filteredPaths : unitedPaths)
+  } catch (err) {
+    console.error('Clipper multi-char processing failed:', err)
+    return []
   }
 }

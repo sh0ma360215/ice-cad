@@ -2,7 +2,7 @@ import { useMemo, useState, useEffect } from 'react'
 import * as THREE from 'three'
 import { VariableParams, FIXED_PARAMS } from '../constants'
 import { Html } from '@react-three/drei'
-import { loadFont, textToShapes, getTextBounds } from '../utils/textToShape'
+import { loadFont, textToShapes, createFilledMultiCharShapes, getTextBounds } from '../utils/textToShape'
 import opentype from 'opentype.js'
 
 interface MoldMeshProps {
@@ -12,7 +12,7 @@ interface MoldMeshProps {
 const F = FIXED_PARAMS
 
 export default function MoldMesh({ params }: MoldMeshProps) {
-  const { text, offsetX, offsetY, scale: textScale, rotation } = params
+  const { text, offsetX, offsetY, scale: textScale, rotation, fillText, fillOffset } = params
   const [font, setFont] = useState<opentype.Font | null>(null)
   const [fontError, setFontError] = useState<string | null>(null)
 
@@ -61,40 +61,84 @@ export default function MoldMesh({ params }: MoldMeshProps) {
     try {
       const chars = text.split('')
       const charCount = chars.length
-      const baseFontSize = Math.min(F.topWidth * 0.85, F.topDepth * 0.85 / charCount)
+      const baseFontSize = Math.min(F.outerWidth * 0.85, F.outerLength * 0.85 / charCount)
       const fontSize = baseFontSize * (textScale / 100)
       const spacing = fontSize * 1.02
       const totalHeight = (charCount - 1) * spacing
 
-      const geometries: THREE.ExtrudeGeometry[] = []
+      // 各文字の位置を計算
+      const charPositions: { x: number; y: number }[] = []
       let minY = Infinity
 
       chars.forEach((char, index) => {
-        const shapes = textToShapes(font, char, fontSize)
         const bounds = getTextBounds(font, char, fontSize)
-
         const centerX = bounds.xMin + bounds.width / 2
         const centerY = bounds.yMin + bounds.height / 2
         const yPos = totalHeight / 2 - index * spacing
 
-        // この文字の最下部を追跡
+        charPositions.push({
+          x: -centerX + offsetX,
+          y: -centerY + yPos + offsetY
+        })
+
         const charBottomY = yPos - bounds.height / 2
         if (charBottomY < minY) minY = charBottomY
+      })
 
-        shapes.forEach((shape) => {
-          // 文字の形でアイス本体を押し出し
-          const geometry = new THREE.ExtrudeGeometry(shape, {
-            depth: F.totalDepth,
-            bevelEnabled: true,
-            bevelThickness: 2,
-            bevelSize: 1.5,
-            bevelSegments: 3,
+      let shapes: THREE.Shape[]
+
+      if (fillText) {
+        // 文字埋め処理ON: 全文字をまとめて処理（文字間も統合）
+        shapes = createFilledMultiCharShapes(font, chars, fontSize, charPositions, fillOffset, 50)
+      } else {
+        // 文字埋め処理OFF: 各文字を個別に処理
+        shapes = []
+        chars.forEach((char, index) => {
+          const charShapes = textToShapes(font, char, fontSize)
+          const pos = charPositions[index]
+
+          charShapes.forEach((shape) => {
+            // 位置を適用した新しいShapeを作成
+            const movedShape = new THREE.Shape()
+            const points = shape.getPoints()
+            if (points.length > 0) {
+              movedShape.moveTo(points[0].x + pos.x, points[0].y + pos.y)
+              for (let i = 1; i < points.length; i++) {
+                movedShape.lineTo(points[i].x + pos.x, points[i].y + pos.y)
+              }
+              movedShape.closePath()
+
+              // 穴も移動
+              for (const hole of shape.holes) {
+                const movedHole = new THREE.Path()
+                const holePoints = hole.getPoints()
+                if (holePoints.length > 0) {
+                  movedHole.moveTo(holePoints[0].x + pos.x, holePoints[0].y + pos.y)
+                  for (let i = 1; i < holePoints.length; i++) {
+                    movedHole.lineTo(holePoints[i].x + pos.x, holePoints[i].y + pos.y)
+                  }
+                  movedHole.closePath()
+                  movedShape.holes.push(movedHole)
+                }
+              }
+
+              shapes.push(movedShape)
+            }
           })
-
-          // 位置調整
-          geometry.translate(-centerX + offsetX, -centerY + yPos + offsetY, 0)
-          geometries.push(geometry)
         })
+      }
+
+      // Shapeをジオメトリに変換
+      const geometries: THREE.ExtrudeGeometry[] = []
+      shapes.forEach((shape) => {
+        const geometry = new THREE.ExtrudeGeometry(shape, {
+          depth: F.totalHeight,
+          bevelEnabled: true,
+          bevelThickness: 2,
+          bevelSize: 1.5,
+          bevelSegments: 3,
+        })
+        geometries.push(geometry)
       })
 
       return { iceGeometries: geometries, bottomY: minY + offsetY }
@@ -102,7 +146,7 @@ export default function MoldMesh({ params }: MoldMeshProps) {
       console.error('Ice geometry generation failed:', err)
       return { iceGeometries: [], bottomY: 0 }
     }
-  }, [font, text, textScale, offsetX, offsetY])
+  }, [font, text, textScale, offsetX, offsetY, fillText, fillOffset])
 
   const iceColor = '#FFB6C1'  // ピンク色（実際のアイスに近い色）
   const stickColor = '#2F2F2F' // 棒の色（黒っぽい色）
@@ -124,7 +168,7 @@ export default function MoldMesh({ params }: MoldMeshProps) {
       {iceGeometries.length > 0 && (
         <mesh
           geometry={stickGeometry}
-          position={[0, bottomY - 35, F.totalDepth / 2]}
+          position={[0, bottomY - 35, F.totalHeight / 2]}
           rotation={[-Math.PI / 2, 0, 0]}
         >
           <meshStandardMaterial color={stickColor} metalness={0.1} roughness={0.6} />

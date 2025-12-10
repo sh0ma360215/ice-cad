@@ -52,33 +52,36 @@ const Drawing2D = forwardRef<Drawing2DHandle, Drawing2DProps>(({ params }, ref) 
     // 図面枠
     drawBorder(ctx, canvas.width, canvas.height)
 
-    // スケール設定
-    const mainScale = 3.5  // メインビュー用
-    const smallScale = 2.5 // 小さいビュー用
+    // スケール設定（図面サイズに合わせて調整）
+    const mainScale = 3.2  // メインビュー用
+    const sideScale = 2.5  // 側面断面図用
 
     // === 参考図面に合わせたレイアウト ===
 
-    // 1. 側面断面図（左上、小さめ）
-    drawSideSection(ctx, 55, 70, smallScale)
+    // 1. 側面断面図（左端、縦長）
+    drawSideSection(ctx, 50, 80, sideScale)
 
     // 2. 上面図（中央左、文字入り）- メイン
     const topViewX = 180
     const topViewY = 100
     drawTopView(ctx, topViewX, topViewY, mainScale, params, font)
 
-    // 3. 正面断面図（上面図の右上）
-    const frontViewX = topViewX + (F.topWidth + F.flangeWidth * 2) * mainScale + 40
-    const frontViewY = 55
+    // 3. 正面断面図（上面図の右側、縦長）
+    const topViewWidth = F.outerWidth * mainScale
+    const frontViewX = topViewX + topViewWidth + 50
+    const frontViewY = 70
     drawFrontSection(ctx, frontViewX, frontViewY, mainScale)
 
-    // 4. 意匠面図（右側、文字入り）
-    const designViewX = frontViewX + F.totalDepth * mainScale + 50
+    // 4. 意匠面図（右端、文字入り）
+    const frontViewWidth = F.outerLength * mainScale
+    const designViewX = frontViewX + frontViewWidth + 130
     const designViewY = 100
     drawDesignView(ctx, designViewX, designViewY, mainScale, params, font)
 
     // 5. 底面図（左下）
+    const topViewHeight = F.outerLength * mainScale
     const bottomViewX = 80
-    const bottomViewY = topViewY + (F.topDepth + F.flangeWidth * 2) * mainScale + 60
+    const bottomViewY = topViewY + topViewHeight + 100
     drawBottomView(ctx, bottomViewX, bottomViewY, mainScale)
 
     // 6. タイトルブロック（右下）
@@ -87,7 +90,7 @@ const Drawing2D = forwardRef<Drawing2DHandle, Drawing2DProps>(({ params }, ref) 
     // 材料厚表示（中央下）
     ctx.font = '14px Arial'
     ctx.fillStyle = '#000000'
-    ctx.fillText('材料厚：0.1mm', 520, canvas.height - 100)
+    ctx.fillText(`材料厚：${F.materialThickness}mm`, 520, canvas.height - 100)
 
   }, [params, font])
 
@@ -150,65 +153,98 @@ function drawBorder(ctx: CanvasRenderingContext2D, w: number, h: number) {
   }
 }
 
-// 側面断面図（参考図面の左上）
+// 側面断面図（精密版 - 勾配とハッチング付き）
 function drawSideSection(
   ctx: CanvasRenderingContext2D,
   x: number, y: number,
   scale: number
 ) {
-  const depth = F.totalDepth * scale
-  const height = F.topDepth * scale
-  const taper = F.outerTaper * Math.PI / 180
-  const innerTaper = F.innerTaper * Math.PI / 180
-  const taperOffset = depth * Math.tan(taper)
-  const innerTaperOffset = depth * Math.tan(innerTaper)
+  // 縦向きの図を描く（高さ方向＝画面Y軸、深さ方向＝画面X軸）
+  const height = F.outerLength * scale     // 113.91
+  const depth = F.totalHeight * scale       // 24.60
+  const flangeLen = ((F.outerLength - F.innerLength) / 2) * scale  // フランジ部分の長さ
+  
+  // 勾配計算 (tan(8度) * 深さ)
+  const draftOffset = depth * Math.tan(F.draftAngleSide * Math.PI / 180)
 
-  ctx.strokeStyle = '#000000'
+  ctx.save()
+  
+  // --- 断面の外形パスを作成 ---
+  ctx.beginPath()
+  
+  // 外側のライン（時計回り）
+  ctx.moveTo(x + depth, y)                           // 右上（フランジ端）
+  ctx.lineTo(x + depth, y + flangeLen)               // フランジ付け根（上）
+  ctx.lineTo(x + draftOffset, y + flangeLen)         // 勾配開始点（上）
+  ctx.lineTo(x, y + height / 2)                      // 底面中央（最も狭い部分）
+  ctx.lineTo(x + draftOffset, y + height - flangeLen) // 勾配終了点（下）
+  ctx.lineTo(x + depth, y + height - flangeLen)      // フランジ付け根（下）
+  ctx.lineTo(x + depth, y + height)                  // 右下（フランジ端）
+  
+  // 内側のライン（反時計回りで戻る）- 材料厚分オフセット
+  const t = 3 * scale / 3  // 見やすくするため誇張
+  ctx.lineTo(x + depth - t, y + height)
+  ctx.lineTo(x + depth - t, y + height - flangeLen)
+  ctx.lineTo(x + draftOffset + t, y + height - flangeLen)
+  ctx.lineTo(x + t, y + height / 2)
+  ctx.lineTo(x + draftOffset + t, y + flangeLen)
+  ctx.lineTo(x + depth - t, y + flangeLen)
+  ctx.lineTo(x + depth - t, y)
+  
+  ctx.closePath()
+  
+  // 輪郭描画
   ctx.lineWidth = 1.2
-
-  // 外形（台形 - 横向き断面）
-  ctx.beginPath()
-  ctx.moveTo(x, y)
-  ctx.lineTo(x + depth, y)
-  ctx.lineTo(x + depth - taperOffset, y + height)
-  ctx.lineTo(x + taperOffset, y + height)
-  ctx.closePath()
+  ctx.strokeStyle = '#000000'
   ctx.stroke()
-
-  // 内側線（内勾配）
-  ctx.lineWidth = 0.5
-  const t = 3
+  
+  // --- ハッチング（斜線）処理 ---
+  ctx.save()
+  ctx.clip()  // さっきのパスで切り抜く
+  
   ctx.beginPath()
-  ctx.moveTo(x + t, y + t)
-  ctx.lineTo(x + depth - t, y + t)
-  ctx.lineTo(x + depth - taperOffset - t, y + height - t)
-  ctx.lineTo(x + taperOffset + t, y + height - t)
-  ctx.closePath()
+  ctx.lineWidth = 0.3
+  ctx.strokeStyle = '#000000'
+  const hatchSize = Math.max(height, depth) * 2
+  for (let i = -hatchSize; i < hatchSize; i += 5) {
+    ctx.moveTo(x - hatchSize + i, y - 10)
+    ctx.lineTo(x + i + 50, y + hatchSize)
+  }
   ctx.stroke()
+  ctx.restore()  // クリップ解除
 
-  // 中心線
-  ctx.setLineDash([6, 3])
+  // 中心線（横方向 - 一点鎖線）
+  ctx.setLineDash([10, 3, 3, 3])
+  ctx.lineWidth = 0.4
   ctx.beginPath()
-  ctx.moveTo(x + depth / 2, y - 15)
-  ctx.lineTo(x + depth / 2, y + height + 15)
+  ctx.moveTo(x - 15, y + height / 2)
+  ctx.lineTo(x + depth + 15, y + height / 2)
   ctx.stroke()
   ctx.setLineDash([])
 
-  // 勾配表示
+  // 寸法線
+  drawDimensionV(ctx, x - 25, y, height, '113.91')
+  drawDimensionV(ctx, x - 50, y + flangeLen, height - flangeLen * 2, '97.30')
+  
+  // 勾配指示
   ctx.font = '9px Arial'
   ctx.fillStyle = '#000000'
-  ctx.fillText(`勾配${F.outerTaper}°`, x - 35, y + 30)
-  ctx.fillText(`勾配${F.innerTaper}°`, x + depth + 5, y + height - 30)
-
-  // 寸法
-  drawDimensionV(ctx, x - 25, y, height, `${F.topDepth}`)
+  ctx.fillText(`勾配${F.draftAngleSide}°`, x - 40, y + 40)
+  ctx.fillText(`勾配${F.draftAngleStick}°`, x + depth + 5, y + height - 40)
+  
+  // R表示
+  ctx.font = '8px Arial'
+  ctx.fillText(`R${F.outerR}`, x + depth + 5, y + 15)
+  ctx.fillText(`R${F.innerR}`, x + depth + 5, y + flangeLen + 10)
 
   // ビュー名
   ctx.font = '10px Arial'
-  ctx.fillText('側面断面図', x + depth / 2 - 25, y - 25)
+  ctx.fillText('側面断面図', x + depth / 2 - 25, y - 15)
+  
+  ctx.restore()
 }
 
-// 上面図（参考図面の中央左）
+// 上面図（精密版 - 図面に厳密に準拠）
 function drawTopView(
   ctx: CanvasRenderingContext2D,
   x: number, y: number,
@@ -216,141 +252,191 @@ function drawTopView(
   params: VariableParams,
   font: opentype.Font | null
 ) {
-  const w = F.topWidth * scale
-  const h = F.topDepth * scale
-  const flange = F.flangeWidth * scale
-  const r = F.cornerR * scale
+  // 寸法をスケール変換
+  const outW = F.outerWidth * scale      // 76.91
+  const outH = F.outerLength * scale     // 113.91
+  const inW = F.innerWidth * scale       // 70.00
+  const inH = F.innerLength * scale      // 107.00
+  const cavW = F.cavityWidth * scale     // 57.90
+  const cavH = F.cavityLength * scale    // 97.30
+  
+  const outR = F.outerR * scale          // 9.46
+  const inR = F.innerR * scale           // 6.00
+  const slotW = F.stickSlotWidth * scale // 14.00
+
+  // 中心座標
+  const cx = x + outW / 2
+  const cy = y + outH / 2
 
   ctx.strokeStyle = '#000000'
   ctx.lineWidth = 1.2
 
-  // 外形（フランジ含む）
-  roundedRect(ctx, x - flange, y - flange, w + flange * 2, h + flange * 2, r + flange * 0.3)
+  // 1. 最外形（フランジ） - R9.46
+  roundedRect(ctx, x, y, outW, outH, outR)
   ctx.stroke()
 
-  // 内形（容器開口部）
-  roundedRect(ctx, x, y, w, h, r)
+  // 2. 開口部（内側） - R6.00、位置は中心合わせ
+  const inX = cx - inW / 2
+  const inY = cy - inH / 2
+  roundedRect(ctx, inX, inY, inW, inH, inR)
   ctx.stroke()
 
-  // 中心線
-  ctx.setLineDash([8, 4])
-  ctx.lineWidth = 0.4
-  ctx.beginPath()
-  ctx.moveTo(x + w / 2, y - flange - 25)
-  ctx.lineTo(x + w / 2, y + h + flange + 25)
-  ctx.moveTo(x - flange - 25, y + h / 2)
-  ctx.lineTo(x + w + flange + 25, y + h / 2)
+  // 3. キャビティ底面（文字エリア） - 57.90 x 97.30
+  const cavX = cx - cavW / 2
+  const cavY = cy - cavH / 2
+  ctx.setLineDash([4, 2])
+  ctx.lineWidth = 0.8
+  roundedRect(ctx, cavX, cavY, cavW, cavH, inR * 0.6)
   ctx.stroke()
   ctx.setLineDash([])
+  ctx.lineWidth = 1.2
 
-  // 意匠（文字輪郭）- 上面図は左右反転（鏡面）
+  // 4. スティック切り欠き（下部） - 幅14.00 (7.00 + 7.00)
+  const slotDepth = 20 * scale / 3  // 切り欠きの深さ
+  
+  // 切り欠き部分を白で塗りつぶして線を消す
+  ctx.fillStyle = '#ffffff'
+  ctx.fillRect(cx - slotW / 2 - 1, y + outH - slotDepth, slotW + 2, slotDepth + 5)
+  
+  // 切り欠きの線を描画
+  ctx.strokeStyle = '#000000'
+  ctx.beginPath()
+  ctx.moveTo(cx - slotW / 2, y + outH)
+  ctx.lineTo(cx - slotW / 2, y + outH - slotDepth)
+  ctx.lineTo(cx + slotW / 2, y + outH - slotDepth)
+  ctx.lineTo(cx + slotW / 2, y + outH)
+  ctx.stroke()
+
+  // 5. 文字描画（底面エリア内に配置、鏡文字）
   if (font && params.text) {
-    drawTextOutlineInView(ctx, font, params, x, y, w, h, scale, true)
+    drawTextOutlineInView(ctx, font, params, cavX, cavY, cavW, cavH, scale, true)
   }
 
-  // 寸法線
-  ctx.lineWidth = 0.5
-
-  // 上部寸法
-  const totalW = w + flange * 2
-  drawDimensionH(ctx, x - flange, y - flange - 45, totalW, `${(F.topWidth + F.flangeWidth * 2).toFixed(2)}`)
-  drawDimensionH(ctx, x, y - flange - 25, w, `${F.topWidth}`)
-
-  // 半幅寸法
-  drawDimensionH(ctx, x, y - flange - 65, w / 2, `${(F.topWidth / 2).toFixed(2)}`)
-  drawDimensionH(ctx, x + w / 2, y - flange - 65, w / 2, `${(F.topWidth / 2).toFixed(2)}`)
-
-  // 右側寸法
-  drawDimensionV(ctx, x + w + flange + 30, y, h, `${F.topDepth}`)
-
-  // 下部フランジ寸法
-  drawDimensionH(ctx, x - flange, y + h + flange + 15, flange, `${F.flangeWidth}`)
-  drawDimensionH(ctx, x + w, y + h + flange + 15, flange, `${F.flangeWidth}`)
-
-  // 内寸法（文字エリア）
-  const innerW = w * 0.75
-  const innerOffset = (w - innerW) / 2
-  ctx.setLineDash([3, 2])
-  ctx.lineWidth = 0.3
-  roundedRect(ctx, x + innerOffset, y + innerOffset, innerW, h - innerOffset * 2, r * 0.5)
+  // 6. 中心線（一点鎖線）
+  ctx.setLineDash([15, 3, 3, 3])
+  ctx.lineWidth = 0.4
+  ctx.beginPath()
+  ctx.moveTo(cx, y - 25)
+  ctx.lineTo(cx, y + outH + 25)
+  ctx.moveTo(x - 25, cy)
+  ctx.lineTo(x + outW + 25, cy)
   ctx.stroke()
   ctx.setLineDash([])
-  drawDimensionH(ctx, x + innerOffset, y + h + flange + 35, innerW, `${(F.topWidth * 0.75).toFixed(2)}`)
+
+  // --- 寸法線（図面と同じ位置に配置） ---
+  ctx.lineWidth = 0.5
+  
+  // 上部寸法
+  drawDimensionH(ctx, x, y - 20, outW, '76.91')
+  drawDimensionH(ctx, inX, y - 40, inW, '70.00')
+  
+  // 半幅寸法（35.00 + 35.00）
+  const halfIn = inW / 2
+  drawDimensionH(ctx, inX, y - 60, halfIn, '35.00')
+  drawDimensionH(ctx, inX + halfIn, y - 60, halfIn, '35.00')
+  
+  // キャビティ幅
+  drawDimensionH(ctx, cavX, y - 80, cavW, '57.90')
+
+  // 右側の縦寸法
+  drawDimensionV(ctx, x + outW + 20, y, outH, '113.91')
+  drawDimensionV(ctx, x + outW + 45, inY, inH, '107.00')
+  drawDimensionV(ctx, x + outW + 70, cavY, cavH, '97.30')
+
+  // 下部寸法（スティック部）
+  drawDimensionH(ctx, cx - slotW / 2, y + outH + 15, F.stickSlotHalf * scale, '7.00')
+  drawDimensionH(ctx, cx, y + outH + 15, F.stickSlotHalf * scale, '7.00')
+  drawDimensionH(ctx, cx - slotW / 2, y + outH + 35, slotW, '14.00')
+
+  // R表示
+  ctx.font = '8px Arial'
+  ctx.fillStyle = '#000000'
+  ctx.fillText(`R${F.outerR}`, x + 5, y + 15)
+  ctx.fillText(`R${F.innerR}`, inX + 5, inY + 15)
 
   // ビュー名
   ctx.font = '11px Arial'
-  ctx.fillStyle = '#000000'
-  ctx.fillText('上面図', x + w / 2 - 18, y - flange - 80)
+  ctx.fillText('上面図', cx - 18, y - 95)
 }
 
-// 正面断面図（参考図面の上面図右上）
+// 正面断面図（精密版 - 縦向き）
 function drawFrontSection(
   ctx: CanvasRenderingContext2D,
   x: number, y: number,
   scale: number
 ) {
-  const depth = F.totalDepth * scale
-  const width = F.topDepth * scale
-  const textD = F.textDepth * scale
+  // 縦向き: 幅=outerLength方向(113.91), 高さ=totalHeight方向(24.60)
+  const width = F.outerLength * scale     // 113.91
+  const height = F.totalHeight * scale    // 24.60
+  const depthStep = F.depthStep * scale   // 21.50
+  const depthText = F.depthText * scale   // 3.00
+  const offsetCorner = F.offsetCorner * scale  // 1.72
 
   ctx.strokeStyle = '#000000'
   ctx.lineWidth = 1.2
 
-  // 断面形状
+  // 外形（台形 - 勾配考慮）
   ctx.beginPath()
-  ctx.moveTo(x, y)
-  ctx.lineTo(x + depth, y)
-  ctx.lineTo(x + depth, y + width)
-  ctx.lineTo(x, y + width)
+  ctx.moveTo(x, y)                              // 左上
+  ctx.lineTo(x + width, y)                      // 右上
+  ctx.lineTo(x + width - offsetCorner, y + height)   // 右下（テーパー）
+  ctx.lineTo(x + offsetCorner, y + height)           // 左下（テーパー）
   ctx.closePath()
   ctx.stroke()
 
-  // 文字彫り深さライン
+  // 文字彫り深さライン（上から3.00の位置）
   ctx.setLineDash([4, 2])
   ctx.lineWidth = 0.5
   ctx.beginPath()
-  ctx.moveTo(x + textD, y)
-  ctx.lineTo(x + textD, y + width)
+  ctx.moveTo(x + 5, y + depthText)
+  ctx.lineTo(x + width - 5, y + depthText)
   ctx.stroke()
 
   // 21.50ライン
-  const line21 = 21.50 * scale
   ctx.beginPath()
-  ctx.moveTo(x + line21, y)
-  ctx.lineTo(x + line21, y + width)
+  ctx.moveTo(x + 5, y + depthStep)
+  ctx.lineTo(x + width - 5, y + depthStep)
   ctx.stroke()
   ctx.setLineDash([])
 
-  // 中心線
-  ctx.setLineDash([6, 3])
+  // 中心線（縦方向 - 一点鎖線）
+  ctx.setLineDash([10, 3, 3, 3])
   ctx.lineWidth = 0.4
   ctx.beginPath()
-  ctx.moveTo(x - 15, y + width / 2)
-  ctx.lineTo(x + depth + 15, y + width / 2)
+  ctx.moveTo(x + width / 2, y - 20)
+  ctx.lineTo(x + width / 2, y + height + 20)
   ctx.stroke()
   ctx.setLineDash([])
 
-  // 寸法線
-  drawDimensionH(ctx, x, y - 20, depth, `${F.totalDepth}(容器内深さ)`)
-  drawDimensionH(ctx, x, y - 40, line21, '21.50')
-  drawDimensionH(ctx, x, y + width + 15, textD, `${F.textDepth}(文字部分深さ)`)
+  // --- 寸法線 ---
+  // 上部: 幅寸法（113.91）
+  drawDimensionH(ctx, x, y - 20, width, '113.91')
+  
+  // 半幅寸法（53.50 + 53.50 = 107.00の半分）
+  const half = (F.innerLength * scale) / 2
+  const halfStart = x + (width - F.innerLength * scale) / 2
+  drawDimensionH(ctx, halfStart, y - 40, half, '53.50')
+  drawDimensionH(ctx, halfStart + half, y - 40, half, '53.50')
 
-  // 右側寸法
-  drawDimensionV(ctx, x + depth + 20, y, width, `${F.topDepth}`)
+  // 右側: 深さ寸法
+  drawDimensionV(ctx, x + width + 15, y, height, `${F.totalHeight}(容器内深さ)`)
+  drawDimensionV(ctx, x + width + 45, y, depthStep, '21.50')
+  drawDimensionV(ctx, x + width + 70, y, depthText, `${F.depthText}(文字部分深さ)`)
 
-  // 差分寸法
+  // 差分寸法（右下）
   ctx.font = '9px Arial'
-  ctx.fillText('1.72', x + depth + 5, y + width + 30)
-  ctx.fillText('3.40', x + depth + 5, y + width + 45)
-  ctx.fillText('12.00', x + textD - 20, y + width + 30)
-  ctx.fillText('24.60', x + line21 - 20, y + width + 45)
+  ctx.fillStyle = '#000000'
+  ctx.fillText(`${F.offsetCorner}`, x + width + 10, y + height + 15)
+  ctx.fillText(`${F.flangeIndicated}`, x + width + 10, y + height + 28)
+  ctx.fillText(`${F.stickSlotHeight}`, x + 15, y + depthText + 12)
+  ctx.fillText('24.60', x + 15, y + depthStep + 12)
 
   // ビュー名
   ctx.font = '11px Arial'
-  ctx.fillText('正面断面図', x + depth / 2 - 28, y - 55)
+  ctx.fillText('正面断面図', x + width / 2 - 30, y - 55)
 }
 
-// 意匠面図（参考図面の右側）
+// 意匠面図（精密版）
 function drawDesignView(
   ctx: CanvasRenderingContext2D,
   x: number, y: number,
@@ -358,9 +444,9 @@ function drawDesignView(
   params: VariableParams,
   font: opentype.Font | null
 ) {
-  const w = F.topWidth * scale
-  const h = F.topDepth * scale
-  const r = F.cornerR * scale
+  const w = F.outerWidth * scale   // 76.91
+  const h = F.outerLength * scale  // 113.91
+  const r = F.innerR * scale       // 6.00
 
   ctx.strokeStyle = '#000000'
   ctx.lineWidth = 1.2
@@ -369,25 +455,25 @@ function drawDesignView(
   roundedRect(ctx, x, y, w, h, r)
   ctx.stroke()
 
-  // 中心線
-  ctx.setLineDash([8, 4])
+  // 中心線（一点鎖線）
+  ctx.setLineDash([10, 3, 3, 3])
   ctx.lineWidth = 0.4
   ctx.beginPath()
-  ctx.moveTo(x + w / 2, y - 15)
-  ctx.lineTo(x + w / 2, y + h + 15)
-  ctx.moveTo(x - 15, y + h / 2)
-  ctx.lineTo(x + w + 15, y + h / 2)
+  ctx.moveTo(x + w / 2, y - 20)
+  ctx.lineTo(x + w / 2, y + h + 20)
+  ctx.moveTo(x - 20, y + h / 2)
+  ctx.lineTo(x + w + 20, y + h / 2)
   ctx.stroke()
   ctx.setLineDash([])
 
-  // 意匠（文字）
+  // 意匠（文字）- 正面なので鏡像なし
   if (font && params.text) {
-    drawTextOutlineInView(ctx, font, params, x, y, w, h, scale)
+    drawTextOutlineInView(ctx, font, params, x, y, w, h, scale, false)
   }
 
   // 寸法
-  drawDimensionH(ctx, x, y - 25, w, `${F.topWidth}`)
-  drawDimensionV(ctx, x + w + 25, y, h, `${F.topDepth}`)
+  drawDimensionH(ctx, x, y - 25, w, '76.91')
+  drawDimensionV(ctx, x + w + 25, y, h, '113.91')
 
   // ビュー名
   ctx.font = '11px Arial'
@@ -395,58 +481,63 @@ function drawDesignView(
   ctx.fillText('意匠面図', x + w / 2 - 22, y - 45)
 }
 
-// 底面図（参考図面の左下）
+// 底面図（精密版）
 function drawBottomView(
   ctx: CanvasRenderingContext2D,
   x: number, y: number,
   scale: number
 ) {
-  const topW = F.topWidth * scale
-  const topH = F.topDepth * scale
-  const bottomW = F.bottomWidth * scale
-  const bottomH = F.bottomDepth * scale
-  const r = F.cornerR * scale * 0.8
+  const outerW = F.outerWidth * scale   // 76.91
+  const outerH = F.outerLength * scale  // 113.91
+  const innerW = F.innerWidth * scale   // 70.00
+  const innerH = F.innerLength * scale  // 107.00
+  const r = F.innerR * scale            // 6.00
 
-  // 上面（フランジ位置）の破線
+  // 中心座標
+  const cx = x + innerW / 2
+  const cy = y + innerH / 2
+
+  // 外形（上面の投影 - 破線）
+  const outerX = cx - outerW / 2
+  const outerY = cy - outerH / 2
   ctx.strokeStyle = '#000000'
   ctx.setLineDash([4, 2])
   ctx.lineWidth = 0.5
-  const offsetX = (topW - bottomW) / 2
-  const offsetY = (topH - bottomH) / 2
-  roundedRect(ctx, x - offsetX, y - offsetY, topW, topH, r * 1.2)
+  roundedRect(ctx, outerX, outerY, outerW, outerH, F.outerR * scale)
   ctx.stroke()
   ctx.setLineDash([])
 
-  // 底面外形
+  // 底面外形（実線）
   ctx.lineWidth = 1.2
-  roundedRect(ctx, x, y, bottomW, bottomH, r)
+  roundedRect(ctx, x, y, innerW, innerH, r)
   ctx.stroke()
 
-  // 中心線
-  ctx.setLineDash([8, 4])
+  // 中心線（一点鎖線）
+  ctx.setLineDash([10, 3, 3, 3])
   ctx.lineWidth = 0.4
   ctx.beginPath()
-  ctx.moveTo(x + bottomW / 2, y - offsetY - 15)
-  ctx.lineTo(x + bottomW / 2, y + bottomH + 15)
-  ctx.moveTo(x - offsetX - 15, y + bottomH / 2)
-  ctx.lineTo(x + bottomW + 15, y + bottomH / 2)
+  ctx.moveTo(cx, outerY - 20)
+  ctx.lineTo(cx, outerY + outerH + 20)
+  ctx.moveTo(outerX - 20, cy)
+  ctx.lineTo(outerX + outerW + 20, cy)
   ctx.stroke()
   ctx.setLineDash([])
 
   // 寸法
-  drawDimensionH(ctx, x, y + bottomH + 20, bottomW, `${F.bottomWidth}`)
-  drawDimensionH(ctx, x - offsetX, y - offsetY - 20, topW, `${F.topWidth}`)
-  drawDimensionV(ctx, x - offsetX - 30, y - offsetY, topH, `${F.topDepth}`)
-  drawDimensionV(ctx, x + bottomW + 20, y, bottomH, `${F.bottomDepth}`)
+  drawDimensionH(ctx, x, y + innerH + 20, innerW, '70.00')
+  drawDimensionH(ctx, outerX, outerY - 20, outerW, '76.91')
+  drawDimensionV(ctx, outerX - 30, outerY, outerH, '113.91')
+  drawDimensionV(ctx, x + innerW + 20, y, innerH, '107.00')
 
-  // 深さ寸法（斜め線で表現）
+  // 深さ・高さ寸法
   ctx.font = '9px Arial'
-  ctx.fillText(`${F.totalDepth}`, x + bottomW + 35, y + bottomH / 2)
+  ctx.fillStyle = '#000000'
+  ctx.fillText(`${F.stickSlotHeight}`, x + innerW + 35, y + 20)
+  ctx.fillText(`${F.totalHeight}`, x + innerW + 35, y + innerH / 2)
 
   // ビュー名
   ctx.font = '11px Arial'
-  ctx.fillStyle = '#000000'
-  ctx.fillText('底面図', x + bottomW / 2 - 18, y - offsetY - 35)
+  ctx.fillText('底面図', cx - 18, outerY - 35)
 }
 
 // タイトルブロック
@@ -515,7 +606,7 @@ function drawTextOutlineInView(
 
   const chars = text.split('')
   const charCount = chars.length
-  // 文字サイズを大きく（端ギリギリまで）
+  // 文字サイズ（キャビティエリアに収まるように）
   const baseFontSize = Math.min(boxW * 0.85, boxH * 0.85 / charCount)
   const fontSize = baseFontSize * (textScale / 100)
   const spacing = fontSize * 1.02
