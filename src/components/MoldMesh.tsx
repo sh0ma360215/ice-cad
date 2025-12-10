@@ -25,92 +25,49 @@ export default function MoldMesh({ params }: MoldMeshProps) {
       })
   }, [])
 
-  // 容器の外形（台形）を生成
-  const containerGeometry = useMemo(() => {
+  // 棒（スティック）の形状
+  const stickGeometry = useMemo(() => {
+    const stickWidth = 10
+    const stickHeight = 2
+    const stickLength = 60  // 棒の長さを長く
+
     const shape = new THREE.Shape()
-    const r = F.cornerR
+    const sw = stickWidth / 2
+    const sh = stickHeight / 2
+    const sr = 0.5
 
-    // 上面の形状（角丸四角形）
-    const w = F.topWidth / 2
-    const h = F.topDepth / 2
-
-    shape.moveTo(-w + r, -h)
-    shape.lineTo(w - r, -h)
-    shape.quadraticCurveTo(w, -h, w, -h + r)
-    shape.lineTo(w, h - r)
-    shape.quadraticCurveTo(w, h, w - r, h)
-    shape.lineTo(-w + r, h)
-    shape.quadraticCurveTo(-w, h, -w, h - r)
-    shape.lineTo(-w, -h + r)
-    shape.quadraticCurveTo(-w, -h, -w + r, -h)
-
-    // 押し出し設定（テーパー付き）
-    const extrudeSettings = {
-      depth: F.totalDepth,
-      bevelEnabled: false,
-    }
-
-    const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings)
-
-    return geometry
-  }, [])
-
-  // フランジ部分
-  const flangeGeometry = useMemo(() => {
-    const shape = new THREE.Shape()
-    const r = F.cornerR + F.flangeWidth * 0.5
-
-    const w = (F.topWidth + F.flangeWidth * 2) / 2
-    const h = (F.topDepth + F.flangeWidth * 2) / 2
-
-    shape.moveTo(-w + r, -h)
-    shape.lineTo(w - r, -h)
-    shape.quadraticCurveTo(w, -h, w, -h + r)
-    shape.lineTo(w, h - r)
-    shape.quadraticCurveTo(w, h, w - r, h)
-    shape.lineTo(-w + r, h)
-    shape.quadraticCurveTo(-w, h, -w, h - r)
-    shape.lineTo(-w, -h + r)
-    shape.quadraticCurveTo(-w, -h, -w + r, -h)
-
-    // 内側の穴
-    const hole = new THREE.Path()
-    const wi = F.topWidth / 2
-    const hi = F.topDepth / 2
-    const ri = F.cornerR
-
-    hole.moveTo(-wi + ri, -hi)
-    hole.lineTo(wi - ri, -hi)
-    hole.quadraticCurveTo(wi, -hi, wi, -hi + ri)
-    hole.lineTo(wi, hi - ri)
-    hole.quadraticCurveTo(wi, hi, wi - ri, hi)
-    hole.lineTo(-wi + ri, hi)
-    hole.quadraticCurveTo(-wi, hi, -wi, hi - ri)
-    hole.lineTo(-wi, -hi + ri)
-    hole.quadraticCurveTo(-wi, -hi, -wi + ri, -hi)
-
-    shape.holes.push(hole)
+    shape.moveTo(-sw + sr, -sh)
+    shape.lineTo(sw - sr, -sh)
+    shape.quadraticCurveTo(sw, -sh, sw, -sh + sr)
+    shape.lineTo(sw, sh - sr)
+    shape.quadraticCurveTo(sw, sh, sw - sr, sh)
+    shape.lineTo(-sw + sr, sh)
+    shape.quadraticCurveTo(-sw, sh, -sw, sh - sr)
+    shape.lineTo(-sw, -sh + sr)
+    shape.quadraticCurveTo(-sw, -sh, -sw + sr, -sh)
 
     return new THREE.ExtrudeGeometry(shape, {
-      depth: 2,
+      depth: stickLength,
       bevelEnabled: false,
     })
   }, [])
 
-  // テキストの3D形状
-  const textGeometries = useMemo(() => {
-    if (!font || !text || text.trim().length === 0) return []
+  // 文字の形でアイス本体を作成
+  const { iceGeometries, bottomY } = useMemo(() => {
+    if (!font || !text || text.trim().length === 0) {
+      return { iceGeometries: [], bottomY: 0 }
+    }
 
     try {
       const chars = text.split('')
       const charCount = chars.length
-      // 文字サイズを大きく（端ギリギリまで）
       const baseFontSize = Math.min(F.topWidth * 0.85, F.topDepth * 0.85 / charCount)
       const fontSize = baseFontSize * (textScale / 100)
-      const spacing = fontSize * 1.05
+      const spacing = fontSize * 1.02
       const totalHeight = (charCount - 1) * spacing
 
       const geometries: THREE.ExtrudeGeometry[] = []
+      let minY = Infinity
 
       chars.forEach((char, index) => {
         const shapes = textToShapes(font, char, fontSize)
@@ -120,50 +77,59 @@ export default function MoldMesh({ params }: MoldMeshProps) {
         const centerY = bounds.yMin + bounds.height / 2
         const yPos = totalHeight / 2 - index * spacing
 
+        // この文字の最下部を追跡
+        const charBottomY = yPos - bounds.height / 2
+        if (charBottomY < minY) minY = charBottomY
+
         shapes.forEach((shape) => {
+          // 文字の形でアイス本体を押し出し
           const geometry = new THREE.ExtrudeGeometry(shape, {
-            depth: F.textDepth,
+            depth: F.totalDepth,
             bevelEnabled: true,
-            bevelThickness: 0.3,
-            bevelSize: 0.2,
-            bevelSegments: 2,
+            bevelThickness: 2,
+            bevelSize: 1.5,
+            bevelSegments: 3,
           })
 
           // 位置調整
           geometry.translate(-centerX + offsetX, -centerY + yPos + offsetY, 0)
-
           geometries.push(geometry)
         })
       })
 
-      return geometries
+      return { iceGeometries: geometries, bottomY: minY + offsetY }
     } catch (err) {
-      console.error('Text geometry generation failed:', err)
-      return []
+      console.error('Ice geometry generation failed:', err)
+      return { iceGeometries: [], bottomY: 0 }
     }
   }, [font, text, textScale, offsetX, offsetY])
 
-  const moldColor = '#00CED1'
-  const textColor = '#008B8B'
+  const iceColor = '#FFB6C1'  // ピンク色（実際のアイスに近い色）
+  const stickColor = '#2F2F2F' // 棒の色（黒っぽい色）
 
   return (
     <group rotation={[-Math.PI / 2, 0, rotation * Math.PI / 180]}>
-      {/* フランジ */}
-      <mesh geometry={flangeGeometry} position={[0, 0, 0]}>
-        <meshStandardMaterial color={moldColor} metalness={0.3} roughness={0.4} />
-      </mesh>
-
-      {/* 容器本体 */}
-      <mesh geometry={containerGeometry} position={[0, 0, -F.totalDepth]}>
-        <meshStandardMaterial color={moldColor} metalness={0.3} roughness={0.4} side={THREE.DoubleSide} />
-      </mesh>
-
-      {/* テキスト */}
-      {textGeometries.map((geometry, index) => (
-        <mesh key={index} geometry={geometry} position={[0, 0, 1]}>
-          <meshStandardMaterial color={textColor} metalness={0.2} roughness={0.5} />
+      {/* アイス本体（文字の形） */}
+      {iceGeometries.map((geometry, index) => (
+        <mesh key={index} geometry={geometry} position={[0, 0, 0]}>
+          <meshStandardMaterial
+            color={iceColor}
+            metalness={0.1}
+            roughness={0.4}
+          />
         </mesh>
       ))}
+
+      {/* 棒（スティック）- 文字の下から */}
+      {iceGeometries.length > 0 && (
+        <mesh
+          geometry={stickGeometry}
+          position={[0, bottomY - 35, F.totalDepth / 2]}
+          rotation={[-Math.PI / 2, 0, 0]}
+        >
+          <meshStandardMaterial color={stickColor} metalness={0.1} roughness={0.6} />
+        </mesh>
+      )}
 
       {/* 読み込み状態 */}
       {!font && !fontError && (

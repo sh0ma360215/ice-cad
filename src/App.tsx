@@ -1,6 +1,6 @@
-import { useState } from 'react'
+import { useState, useRef } from 'react'
 import MoldPreview from './components/MoldPreview'
-import Drawing2D from './components/Drawing2D'
+import Drawing2D, { Drawing2DHandle } from './components/Drawing2D'
 import TextInput from './components/TextInput'
 import ParameterSliders from './components/ParameterSliders'
 import { FIXED_PARAMS, VariableParams, defaultVariableParams } from './constants'
@@ -8,6 +8,13 @@ import { FIXED_PARAMS, VariableParams, defaultVariableParams } from './constants
 function App() {
   const [params, setParams] = useState<VariableParams>(defaultVariableParams)
   const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d')
+  const drawing2DRef = useRef<Drawing2DHandle>(null)
+
+  const handleExport = () => {
+    if (viewMode === '2d' && drawing2DRef.current) {
+      drawing2DRef.current.exportPNG()
+    }
+  }
 
   const updateParam = <K extends keyof VariableParams>(
     key: K,
@@ -174,6 +181,22 @@ function App() {
           </div>
         </div>
 
+        {/* 出力機能 */}
+        <div className="border-t border-gray-700 pt-4 mt-4">
+          <h3 className="text-sm font-medium text-gray-400 mb-2">出力</h3>
+          <button
+            onClick={handleExport}
+            className="w-full py-2 px-4 bg-green-600 hover:bg-green-500 text-white rounded-lg font-medium transition-colors"
+          >
+            {viewMode === '2d' ? 'PNG画像をダウンロード' : '3Dモデル（準備中）'}
+          </button>
+          <p className="text-xs text-gray-500 mt-2">
+            {viewMode === '2d'
+              ? '2D図面をPNG画像として保存します'
+              : 'STL形式での出力は今後対応予定'}
+          </p>
+        </div>
+
         <div className="mt-auto text-xs text-gray-500">
           材料厚: {FIXED_PARAMS.materialThickness}mm
         </div>
@@ -182,7 +205,7 @@ function App() {
       {/* Right Panel - View */}
       <div className="flex-1 relative bg-gray-100">
         {viewMode === '2d' ? (
-          <Drawing2D params={params} />
+          <Drawing2D ref={drawing2DRef} params={params} />
         ) : (
           <MoldPreview params={params} />
         )}

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react'
 import { VariableParams, FIXED_PARAMS } from '../constants'
 import { loadFont } from '../utils/textToShape'
 import opentype from 'opentype.js'
@@ -7,11 +7,28 @@ interface Drawing2DProps {
   params: VariableParams
 }
 
+export interface Drawing2DHandle {
+  exportPNG: () => void
+}
+
 const F = FIXED_PARAMS
 
-export default function Drawing2D({ params }: Drawing2DProps) {
+const Drawing2D = forwardRef<Drawing2DHandle, Drawing2DProps>(({ params }, ref) => {
   const canvasRef = useRef<HTMLCanvasElement>(null)
   const [font, setFont] = useState<opentype.Font | null>(null)
+
+  // 外部からPNG出力を呼び出せるようにする
+  useImperativeHandle(ref, () => ({
+    exportPNG: () => {
+      const canvas = canvasRef.current
+      if (!canvas) return
+
+      const link = document.createElement('a')
+      link.download = `${params.text}_図面.png`
+      link.href = canvas.toDataURL('image/png')
+      link.click()
+    }
+  }))
 
   useEffect(() => {
     loadFont().then(setFont).catch(console.error)
@@ -83,7 +100,9 @@ export default function Drawing2D({ params }: Drawing2DProps) {
       />
     </div>
   )
-}
+})
+
+export default Drawing2D
 
 // 図面枠
 function drawBorder(ctx: CanvasRenderingContext2D, w: number, h: number) {
