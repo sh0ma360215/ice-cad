@@ -67,6 +67,6 @@ export const defaultVariableParams: VariableParams = {
   offsetY: 0,
   scale: 100,
   rotation: 0,
-  fillText: true,       // デフォルトでON
+  fillText: false,       // デフォルトでON
   fillOffset: 3,        // デフォルト3mm
 }
