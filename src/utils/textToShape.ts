@@ -1,15 +1,16 @@
 import * as THREE from 'three'
 import opentype from 'opentype.js'
 import { Clipper, Path64, Paths64, FillRule, JoinType, EndType } from 'clipper2-js'
+import {
+  FONT_URL,
+  CLIPPER_SCALE,
+  BEZIER_SEGMENTS,
+  FILL_TEXT_DEFAULTS,
+  SHAPE_POINTS_DIVISIONS,
+} from '../constants/geometry'
 
 let cachedFont: opentype.Font | null = null
 let fontLoadPromise: Promise<opentype.Font> | null = null
-
-// Noto Sans JP Bold (ローカルファイル)
-const FONT_URL = '/fonts/NotoSansJP-Bold.otf'
-
-// Clipperは整数座標を使用するためスケール係数
-const CLIPPER_SCALE = 1000
 
 export async function loadFont(): Promise<opentype.Font> {
   if (cachedFont) return cachedFont
@@ -67,7 +68,7 @@ export function textToShapes(
           cmd.x1, -cmd.y1,
           cmd.x2, -cmd.y2,
           cmd.x, -cmd.y,
-          5
+          BEZIER_SEGMENTS
         )
         currentPoints.push(...bezierPoints)
         break
@@ -79,7 +80,7 @@ export function textToShapes(
           last.x, last.y,
           cmd.x1, -cmd.y1,
           cmd.x, -cmd.y,
-          5
+          BEZIER_SEGMENTS
         )
         currentPoints.push(...qPoints)
         break
@@ -137,8 +138,8 @@ export function textToShapes(
   return shapes
 }
 
-// 時計回りかどうかを判定
-function isClockwise(points: THREE.Vector2[]): boolean {
+// 時計回りかどうかを判定（Shoelace formula）
+export function isClockwise(points: THREE.Vector2[]): boolean {
   let sum = 0
   for (let i = 0; i < points.length; i++) {
     const p1 = points[i]
@@ -149,7 +150,7 @@ function isClockwise(points: THREE.Vector2[]): boolean {
 }
 
 // 三次ベジェ曲線を直線で近似
-function approximateCubicBezier(
+export function approximateCubicBezier(
   x0: number, y0: number,
   x1: number, y1: number,
   x2: number, y2: number,
@@ -168,7 +169,7 @@ function approximateCubicBezier(
 }
 
 // 二次ベジェ曲線を直線で近似
-function approximateQuadraticBezier(
+export function approximateQuadraticBezier(
   x0: number, y0: number,
   x1: number, y1: number,
   x2: number, y2: number,
@@ -186,7 +187,7 @@ function approximateQuadraticBezier(
 }
 
 // 点群の中心を取得
-function getCenter(points: THREE.Vector2[]): THREE.Vector2 {
+export function getCenter(points: THREE.Vector2[]): THREE.Vector2 {
   let x = 0, y = 0
   for (const p of points) {
     x += p.x
@@ -195,8 +196,8 @@ function getCenter(points: THREE.Vector2[]): THREE.Vector2 {
   return new THREE.Vector2(x / points.length, y / points.length)
 }
 
-// 点がポリゴン内にあるか判定
-function isPointInPolygon(point: THREE.Vector2, polygon: THREE.Vector2[]): boolean {
+// 点がポリゴン内にあるか判定（Ray casting algorithm）
+export function isPointInPolygon(point: THREE.Vector2, polygon: THREE.Vector2[]): boolean {
   let inside = false
   for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
     const xi = polygon[i].x, yi = polygon[i].y
@@ -240,7 +241,7 @@ function shapesToClipperPaths(shapes: THREE.Shape[], offsetX: number = 0, offset
   for (const shape of shapes) {
     // 外側輪郭
     const outerPath = new Path64()
-    const points = shape.getPoints(20)
+    const points = shape.getPoints(SHAPE_POINTS_DIVISIONS)
     for (const p of points) {
       outerPath.push({
         x: Math.round((p.x + offsetX) * CLIPPER_SCALE),
@@ -254,7 +255,7 @@ function shapesToClipperPaths(shapes: THREE.Shape[], offsetX: number = 0, offset
     // 穴
     for (const hole of shape.holes) {
       const holePath = new Path64()
-      const holePoints = hole.getPoints(20)
+      const holePoints = hole.getPoints(SHAPE_POINTS_DIVISIONS)
       for (const p of holePoints) {
         holePath.push({
           x: Math.round((p.x + offsetX) * CLIPPER_SCALE),
@@ -298,17 +299,9 @@ function clipperPathsToShapes(paths: Paths64): THREE.Shape[] {
     })
   }
 
-  console.log('Clipper paths analysis:', pathsWithArea.map(p => ({
-    points: p.path.length,
-    signedArea: p.signedArea / (CLIPPER_SCALE * CLIPPER_SCALE),
-    isOuter: p.isOuter
-  })))
-
   // 外側パスを面積で降順ソート
   const outerPaths = pathsWithArea.filter(p => p.isOuter).sort((a, b) => b.absArea - a.absArea)
   const innerPaths = pathsWithArea.filter(p => !p.isOuter)
-
-  console.log(`Outer paths: ${outerPaths.length}, Inner paths: ${innerPaths.length}`)
 
   const shapes: THREE.Shape[] = []
 
@@ -361,8 +354,8 @@ export function createFilledTextShapes(
   font: opentype.Font,
   text: string,
   fontSize: number,
-  offsetDistance: number = 3,  // 膨張距離（mm）
-  minHoleArea: number = 100    // 小さな穴を除去する閾値
+  offsetDistance: number = FILL_TEXT_DEFAULTS.offsetDistance,
+  minHoleArea: number = FILL_TEXT_DEFAULTS.minHoleArea
 ): THREE.Shape[] {
   // 1. 文字のパスを取得
   const textShapes = textToShapes(font, text, fontSize)
@@ -421,9 +414,9 @@ export function createFilledMultiCharShapes(
   font: opentype.Font,
   chars: string[],
   fontSize: number,
-  charPositions: { x: number; y: number }[],  // 各文字の位置
-  offsetDistance: number = 3,
-  minHoleArea: number = 100
+  charPositions: { x: number; y: number }[],
+  offsetDistance: number = FILL_TEXT_DEFAULTS.offsetDistance,
+  minHoleArea: number = FILL_TEXT_DEFAULTS.minHoleArea
 ): THREE.Shape[] {
   if (chars.length === 0) return []
 
