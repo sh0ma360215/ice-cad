@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react'
 import { VariableParams, FIXED_PARAMS } from '../constants'
+import {
+  CANVAS,
+  LAYOUT,
+  BORDER,
+  FONTS,
+  COLORS,
+} from '../constants/drawing'
 import { loadFont } from '../utils/textToShape'
 import opentype from 'opentype.js'
 
@@ -42,63 +49,63 @@ const Drawing2D = forwardRef<Drawing2DHandle, Drawing2DProps>(({ params }, ref) 
     if (!ctx) return
 
     // A3横サイズ風のキャンバス（参考図面に合わせて）
-    canvas.width = 1400
-    canvas.height = 900
+    canvas.width = CANVAS.width
+    canvas.height = CANVAS.height
 
     // 背景（白）
-    ctx.fillStyle = '#ffffff'
+    ctx.fillStyle = COLORS.background
     ctx.fillRect(0, 0, canvas.width, canvas.height)
 
     // 図面枠
     drawBorder(ctx, canvas.width, canvas.height)
 
     // スケール設定（図面サイズに合わせて調整）
-    const mainScale = 3.2  // 全ビュー共通スケール
+    const mainScale = LAYOUT.scale
 
     // === 参考図面に合わせたレイアウト ===
 
     // 基準となる位置（図全体のオフセット）
-    const baseX = 200  // 右にシフト
-    const baseY = 250
+    const baseX = LAYOUT.baseX
+    const baseY = LAYOUT.baseY
 
     // 1. 側面断面図（左端、上面図と同じ高さ、同じスケール）
-    drawSideSection(ctx, baseX + 5, baseY, mainScale)
+    drawSideSection(ctx, baseX + LAYOUT.sideSectionOffsetX, baseY, mainScale)
 
     // 2. 上面図（中央、文字入り）- メイン
-    const topViewX = baseX + 180
+    const topViewX = baseX + LAYOUT.topViewOffsetX
     const topViewY = baseY
     const topViewWidth = F.outerWidth * mainScale
     const topViewHeight = F.outerLength * mainScale
     drawTopView(ctx, topViewX, topViewY, mainScale, params, font)
 
     // 3. 正面断面図（上面図の上、縦に並ぶ、幅を揃える）
-    const frontViewX = topViewX  // 上面図と左端を揃える
-    const frontViewY = topViewY - 180 // 上面図の上（間隔を広げる）
+    const frontViewX = topViewX
+    const frontViewY = topViewY - LAYOUT.frontSectionOffsetY
     drawFrontSection(ctx, frontViewX, frontViewY, mainScale)
 
     // 4. 深さ方向断面図（上面図と意匠図の間）
-    const depthSectionX = topViewX + topViewWidth + 170
+    const depthSectionX = topViewX + topViewWidth + LAYOUT.depthSectionOffsetX
     const depthSectionY = baseY
     drawDepthSection(ctx, depthSectionX, depthSectionY, mainScale)
 
     // 5. 意匠面図（右端、上面図と同じ高さ）
     const depthSectionWidth = F.totalHeight * mainScale
-    const designViewX = depthSectionX + depthSectionWidth + 170
-    const designViewY = baseY  // 上面図と同じ高さ
+    const designViewX = depthSectionX + depthSectionWidth + LAYOUT.designViewOffsetX
+    const designViewY = baseY
     drawDesignView(ctx, designViewX, designViewY, mainScale, params, font)
 
     // 6. 底面図（上面図の下、縦に並ぶ）
-    const bottomViewX = topViewX + (topViewWidth - F.outerWidth * mainScale) / 2  // 中心を揃える
-    const bottomViewY = topViewY + topViewHeight + 100  // 間隔を調整（上に移動）
+    const bottomViewX = topViewX + (topViewWidth - F.outerWidth * mainScale) / 2
+    const bottomViewY = topViewY + topViewHeight + LAYOUT.bottomViewOffsetY
     drawBottomView(ctx, bottomViewX, bottomViewY, mainScale)
 
     // 7. タイトルブロック（右下）
-    drawTitleBlock(ctx, canvas.width - 350, canvas.height - 150, params.text)
+    drawTitleBlock(ctx, canvas.width - LAYOUT.titleBlockMarginRight, canvas.height - LAYOUT.titleBlockMarginBottom, params.text)
 
     // 材料厚表示（中央下）
-    ctx.font = '14px Arial'
-    ctx.fillStyle = '#000000'
-    ctx.fillText(`材料厚：${F.materialThickness}mm`, baseX + 520, canvas.height - 100)
+    ctx.font = FONTS.normal
+    ctx.fillStyle = COLORS.text
+    ctx.fillText(`材料厚：${F.materialThickness}mm`, baseX + LAYOUT.materialThicknessOffsetX, canvas.height - LAYOUT.materialThicknessMarginBottom)
 
   }, [params, font])
 
@@ -117,45 +124,45 @@ export default Drawing2D
 
 // 図面枠
 function drawBorder(ctx: CanvasRenderingContext2D, w: number, h: number) {
-  ctx.strokeStyle = '#000000'
-  ctx.lineWidth = 2
-  ctx.strokeRect(10, 10, w - 20, h - 20)
+  const margin = BORDER.margin
+  ctx.strokeStyle = COLORS.line
+  ctx.lineWidth = BORDER.lineWidth
+  ctx.strokeRect(margin, margin, w - margin * 2, h - margin * 2)
 
   // グリッド参照（A-F, 1-8）
-  ctx.lineWidth = 0.5
-  ctx.font = '11px Arial'
-  ctx.fillStyle = '#000000'
+  ctx.lineWidth = BORDER.gridLineWidth
+  ctx.font = BORDER.labelFont
+  ctx.fillStyle = COLORS.text
 
-  const cols = 8
-  const rows = 6
-  const colWidth = (w - 40) / cols
-  const rowHeight = (h - 40) / rows
+  const cols = BORDER.cols
+  const rows = BORDER.rows
+  const colWidth = (w - margin * 4) / cols
+  const rowHeight = (h - margin * 4) / rows
 
   for (let i = 0; i < cols; i++) {
-    const x = 20 + colWidth * i + colWidth / 2
-    ctx.fillText(String(cols - i), x - 4, 24)
-    ctx.fillText(String(cols - i), x - 4, h - 14)
+    const x = margin * 2 + colWidth * i + colWidth / 2
+    ctx.fillText(String(cols - i), x - 4, margin + 14)
+    ctx.fillText(String(cols - i), x - 4, h - margin - 4)
     if (i > 0) {
       ctx.beginPath()
-      ctx.moveTo(20 + colWidth * i, 10)
-      ctx.lineTo(20 + colWidth * i, 28)
-      ctx.moveTo(20 + colWidth * i, h - 28)
-      ctx.lineTo(20 + colWidth * i, h - 10)
+      ctx.moveTo(margin * 2 + colWidth * i, margin)
+      ctx.lineTo(margin * 2 + colWidth * i, margin + 18)
+      ctx.moveTo(margin * 2 + colWidth * i, h - margin - 18)
+      ctx.lineTo(margin * 2 + colWidth * i, h - margin)
       ctx.stroke()
     }
   }
 
-  const rowLabels = ['F', 'E', 'D', 'C', 'B', 'A']
   for (let i = 0; i < rows; i++) {
-    const y = 20 + rowHeight * i + rowHeight / 2
-    ctx.fillText(rowLabels[i], 14, y + 4)
-    ctx.fillText(rowLabels[i], w - 20, y + 4)
+    const y = margin * 2 + rowHeight * i + rowHeight / 2
+    ctx.fillText(BORDER.rowLabels[i], margin + 4, y + 4)
+    ctx.fillText(BORDER.rowLabels[i], w - margin * 2, y + 4)
     if (i > 0) {
       ctx.beginPath()
-      ctx.moveTo(10, 20 + rowHeight * i)
-      ctx.lineTo(28, 20 + rowHeight * i)
-      ctx.moveTo(w - 28, 20 + rowHeight * i)
-      ctx.lineTo(w - 10, 20 + rowHeight * i)
+      ctx.moveTo(margin, margin * 2 + rowHeight * i)
+      ctx.lineTo(margin + 18, margin * 2 + rowHeight * i)
+      ctx.moveTo(w - margin - 18, margin * 2 + rowHeight * i)
+      ctx.lineTo(w - margin, margin * 2 + rowHeight * i)
       ctx.stroke()
     }
   }

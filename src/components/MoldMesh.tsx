@@ -1,6 +1,14 @@
 import { useMemo, useState, useEffect } from 'react'
 import * as THREE from 'three'
 import { VariableParams, FIXED_PARAMS } from '../constants'
+import {
+  STICK_DIMENSIONS,
+  ICE_EXTRUDE_SETTINGS,
+  STICK_OFFSET_Y,
+  MESH_COLORS,
+  MATERIAL_SETTINGS,
+} from '../constants/mesh'
+import { TEXT_SIZE } from '../constants/geometry'
 import { Html } from '@react-three/drei'
 import { loadFont, textToShapes, createFilledMultiCharShapes, getTextBounds } from '../utils/textToShape'
 import opentype from 'opentype.js'
@@ -27,14 +35,12 @@ export default function MoldMesh({ params }: MoldMeshProps) {
 
   // 棒（スティック）の形状
   const stickGeometry = useMemo(() => {
-    const stickWidth = 10
-    const stickHeight = 2
-    const stickLength = 60  // 棒の長さを長く
+    const { width, height, length, cornerRadius } = STICK_DIMENSIONS
 
     const shape = new THREE.Shape()
-    const sw = stickWidth / 2
-    const sh = stickHeight / 2
-    const sr = 0.5
+    const sw = width / 2
+    const sh = height / 2
+    const sr = cornerRadius
 
     shape.moveTo(-sw + sr, -sh)
     shape.lineTo(sw - sr, -sh)
@@ -47,7 +53,7 @@ export default function MoldMesh({ params }: MoldMeshProps) {
     shape.quadraticCurveTo(-sw, -sh, -sw + sr, -sh)
 
     return new THREE.ExtrudeGeometry(shape, {
-      depth: stickLength,
+      depth: length,
       bevelEnabled: false,
     })
   }, [])
@@ -61,9 +67,12 @@ export default function MoldMesh({ params }: MoldMeshProps) {
     try {
       const chars = text.split('')
       const charCount = chars.length
-      const baseFontSize = Math.min(F.outerWidth * 0.85, F.outerLength * 0.85 / charCount)
+      const baseFontSize = Math.min(
+        F.outerWidth * TEXT_SIZE.maxRatio,
+        F.outerLength * TEXT_SIZE.maxRatio / charCount
+      )
       const fontSize = baseFontSize * (textScale / 100)
-      const spacing = fontSize * 1.02
+      const spacing = fontSize * TEXT_SIZE.spacingFactor
       const totalHeight = (charCount - 1) * spacing
 
       // 各文字の位置を計算
@@ -133,10 +142,7 @@ export default function MoldMesh({ params }: MoldMeshProps) {
       shapes.forEach((shape) => {
         const geometry = new THREE.ExtrudeGeometry(shape, {
           depth: F.totalHeight,
-          bevelEnabled: true,
-          bevelThickness: 2,
-          bevelSize: 1.5,
-          bevelSegments: 3,
+          ...ICE_EXTRUDE_SETTINGS,
         })
         geometries.push(geometry)
       })
@@ -148,18 +154,14 @@ export default function MoldMesh({ params }: MoldMeshProps) {
     }
   }, [font, text, textScale, offsetX, offsetY, fillText, fillOffset])
 
-  const iceColor = '#FFB6C1'  // ピンク色（実際のアイスに近い色）
-  const stickColor = '#2F2F2F' // 棒の色（黒っぽい色）
-
   return (
     <group rotation={[-Math.PI / 2, 0, rotation * Math.PI / 180]}>
       {/* アイス本体（文字の形） */}
       {iceGeometries.map((geometry, index) => (
         <mesh key={index} geometry={geometry} position={[0, 0, 0]}>
           <meshStandardMaterial
-            color={iceColor}
-            metalness={0.1}
-            roughness={0.4}
+            color={MESH_COLORS.ice}
+            {...MATERIAL_SETTINGS.ice}
           />
         </mesh>
       ))}
@@ -168,10 +170,10 @@ export default function MoldMesh({ params }: MoldMeshProps) {
       {iceGeometries.length > 0 && (
         <mesh
           geometry={stickGeometry}
-          position={[0, bottomY - 35, F.totalHeight / 2]}
+          position={[0, bottomY - STICK_OFFSET_Y, F.totalHeight / 2]}
           rotation={[-Math.PI / 2, 0, 0]}
         >
-          <meshStandardMaterial color={stickColor} metalness={0.1} roughness={0.6} />
+          <meshStandardMaterial color={MESH_COLORS.stick} {...MATERIAL_SETTINGS.stick} />
         </mesh>
       )}
 
