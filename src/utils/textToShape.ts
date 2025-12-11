@@ -377,10 +377,10 @@ export function createFilledTextShapes(
     if (unitedPaths.length === 0) return textShapes
 
     // 4. 統合したパスを外側に縁取り（オフセット/膨張）
-    const scaledOutlineWidth = Math.round(outlineWidth * CLIPPER_SCALE)
+    const scaledOffsetDistance = Math.round(offsetDistance * CLIPPER_SCALE)
     const outlinedPaths = Clipper.InflatePaths(
       unitedPaths,
-      scaledOutlineWidth,
+      scaledOffsetDistance,
       JoinType.Round,
       EndType.Polygon
     )
@@ -454,10 +454,10 @@ export function createFilledMultiCharShapes(
 
     // 3. 統合したパスを外側に縁取り（オフセット/膨張）
     // 縁取りの幅をスケーリング
-    const scaledOutlineWidth = Math.round(outlineWidth * CLIPPER_SCALE)
+    const scaledOffsetDistance = Math.round(offsetDistance * CLIPPER_SCALE)
     const outlinedPaths = Clipper.InflatePaths(
       unitedPaths,
-      scaledOutlineWidth,
+      scaledOffsetDistance,
       JoinType.Round,
       EndType.Polygon
     )
@@ -639,9 +639,7 @@ export function createFilledMultiCharShapesAuto(
   
   // 3. 最適なオフセット量を計算
   const optimalOffset = calculateOptimalOffset(positionedShapes, margin, minOffset, maxOffset)
-  
-  console.log(`文字間距離から計算したオフセット: ${optimalOffset.toFixed(2)}mm`)
-  
+
   // 4. 全文字のパスを収集（Paths64形式、位置情報込み）
   const allPaths = new Paths64()
   

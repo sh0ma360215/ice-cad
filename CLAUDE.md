@@ -24,7 +24,7 @@ npm run test:coverage  # Run tests with coverage report
 ### Core Data Flow
 1. User inputs Japanese text and adjusts parameters in the left panel
 2. `App.tsx` manages state with `VariableParams` (text, offsetX, offsetY, scale, rotation, fillText, fillOffset)
-3. Fixed manufacturing parameters are defined in `FIXED_PARAMS` constant in `src/constants.ts`
+3. Fixed manufacturing parameters are defined in `FIXED_PARAMS` constant in `src/constants/manufacturing.ts`
 4. View renders either 2D CAD drawing (Canvas API) or 3D model (Three.js)
 
 ### Key Components
@@ -33,7 +33,7 @@ npm run test:coverage  # Run tests with coverage report
 - **Drawing2D.tsx**: Canvas-based 2D CAD drawing with 6 views (side section, top, front section, depth section, design, bottom) and dimension lines. Exposes `exportPNG()` via forwardRef
 - **MoldPreview.tsx**: Three.js canvas wrapper with OrbitControls and Environment
 - **MoldMesh.tsx**: 3D geometry generation using ExtrudeGeometry for text shapes
-- **constants.ts**: `FIXED_PARAMS` (manufacturing specs) and `VariableParams` interface definition
+- **constants/**: Module containing `FIXED_PARAMS` (manufacturing specs), `VariableParams` interface, and other configuration constants organized by domain (manufacturing, geometry, drawing, mesh)
 
 ### Font Processing (Critical Path)
 
@@ -54,7 +54,7 @@ Japanese text → 3D shapes conversion in `src/utils/textToShape.ts`:
 
 ## Manufacturing Parameters
 
-Fixed specs in `FIXED_PARAMS` (`src/constants.ts`):
+Fixed specs in `FIXED_PARAMS` (`src/constants/manufacturing.ts`):
 - Container dimensions: 76.91×113.91mm (outer), 70×107mm (inner)
 - Cavity (text area): 57.90×97.30mm
 - Depth: 24.5mm, Text depth: 3mm
