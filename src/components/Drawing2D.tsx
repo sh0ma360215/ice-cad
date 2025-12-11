@@ -782,38 +782,52 @@ function drawTitleBlock(
   // 内部グリッド線
   ctx.lineWidth = 0.5
   ctx.beginPath()
-  // 横線
+  // 横線（ヘッダー行、データ行の区切り）
   ctx.moveTo(x, y + 25); ctx.lineTo(x + w, y + 25)
   ctx.moveTo(x, y + 50); ctx.lineTo(x + w, y + 50)
   ctx.moveTo(x, y + 75); ctx.lineTo(x + w, y + 75)
   ctx.moveTo(x, y + 100); ctx.lineTo(x + w, y + 100)
-  // 縦線
-  ctx.moveTo(x + 60, y); ctx.lineTo(x + 60, y + 75)
-  ctx.moveTo(x + 120, y); ctx.lineTo(x + 120, y + 75)
-  ctx.moveTo(x + 180, y); ctx.lineTo(x + 180, y + 75)
-  ctx.moveTo(x + 240, y); ctx.lineTo(x + 240, y + 75)
+  // 縦線（列の区切り）
+  ctx.moveTo(x + 60, y); ctx.lineTo(x + 60, y + 100)
+  ctx.moveTo(x + 120, y); ctx.lineTo(x + 120, y + 100)
+  ctx.moveTo(x + 180, y); ctx.lineTo(x + 180, y + 100)
+  ctx.moveTo(x + 240, y); ctx.lineTo(x + 240, y + 100)
   ctx.stroke()
 
-  // ラベル
+  // ヘッダー行のラベル
   ctx.font = '9px Arial'
   ctx.fillStyle = '#000000'
-  ctx.fillText('設計者欄出力', x + 5, y + 15)
-  ctx.fillText('作成者', x + 65, y + 15)
-  ctx.fillText('内容/備考/修正案', x + 125, y + 15)
-  ctx.fillText('改訂履歴不正', x + 245, y + 15)
-  ctx.fillText('会社', x + 5, y + 40)
-  ctx.fillText('部署', x + 5, y + 65)
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  
+  // ヘッダー行（中央揃え）
+  const headerY = y + 12.5
+  ctx.textAlign = 'center'
+  ctx.fillText('設計者欄出力', x + 30, headerY)
+  ctx.fillText('作成者', x + 90, headerY)
+  ctx.fillText('内容/備考/修正案', x + 150, headerY)
+  ctx.fillText('改訂履歴', x + 280, headerY)
 
-  ctx.fillText('名　称', x + 5, y + 90)
-  ctx.fillText('製　図', x + 185, y + 90)
+  // データ行のラベル（左揃え）
+  ctx.textAlign = 'left'
+  ctx.fillText('会社', x + 5, y + 37.5)
+  ctx.fillText('部署', x + 5, y + 62.5)
+  ctx.fillText('名　称', x + 5, y + 87.5)
+  
+  // 「製図」は「内容/備考/修正案」列に配置
+  ctx.textAlign = 'center'
+  ctx.fillText('製　図', x + 150, y + 87.5)
 
-  // メインタイトル
-  ctx.font = 'bold 18px Arial'
-  ctx.fillText(`${text}投影図`, x + 70, y + 120)
+  // メインタイトル（下部の大きなタイトルエリア）
+  ctx.font = 'bold 20px Arial'
+  ctx.textAlign = 'left'
+  ctx.textBaseline = 'middle'
+  ctx.fillText(`${text}投影図`, x + 10, y + 115)
 
-  // 図面サイズ
-  ctx.font = '14px Arial'
-  ctx.fillText('A3', x + w - 30, y + 120)
+  // 図面サイズ（右側に配置）
+  ctx.font = '16px Arial'
+  ctx.textAlign = 'right'
+  ctx.fillText('A3', x + w - 10, y + 115)
 }
 
 // 文字輪郭をハッチング付きで描画（上面図用）

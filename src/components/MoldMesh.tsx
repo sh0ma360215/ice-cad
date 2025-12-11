@@ -10,7 +10,8 @@ import {
 } from '../constants/mesh'
 import { TEXT_SIZE } from '../constants/geometry'
 import { Html } from '@react-three/drei'
-import { loadFont, textToShapes, createFilledMultiCharShapes, getTextBounds } from '../utils/textToShape'
+import { loadFont, textToShapes, createFilledMultiCharShapes, createFilledMultiCharShapesAuto, getTextBounds } from '../utils/textToShape'
+import { FILL_PARAMS } from '../constants'
 import opentype from 'opentype.js'
 
 interface MoldMeshProps {
@@ -97,7 +98,8 @@ export default function MoldMesh({ params }: MoldMeshProps) {
       let shapes: THREE.Shape[]
 
       if (fillText) {
-        // 文字埋め処理ON: 全文字をまとめて処理（文字間も統合）
+        // 文字縁取り処理ON: 全文字をまとめて縁取り（文字間も統合）
+        // fillOffset = 縁取りの幅（mm）
         shapes = createFilledMultiCharShapes(font, chars, fontSize, charPositions, fillOffset, 50)
       } else {
         // 文字埋め処理OFF: 各文字を個別に処理

@@ -349,7 +349,8 @@ function isPointInPath64(point: { x: number; y: number }, polygon: Path64): bool
   return inside
 }
 
-// 文字を埋めた形状を生成（単一文字用）
+// 文字を縁取りした形状を生成（単一文字用）
+// 縁取り = 文字の輪郭を外側に一定距離だけ拡張した形状
 export function createFilledTextShapes(
   font: opentype.Font,
   text: string,
@@ -366,27 +367,31 @@ export function createFilledTextShapes(
   if (clipperPaths.length === 0) return textShapes
 
   try {
-    // 3. パスをオフセット（膨張）- スケーリング済みなのでoffsetDistanceもスケール
-    const scaledOffset = Math.round(offsetDistance * CLIPPER_SCALE)
-    const inflatedPaths = Clipper.InflatePaths(
+    // 3. まず全パスを統合（Union）
+    const unitedPaths = Clipper.Union(
       clipperPaths,
-      scaledOffset,
+      undefined,
+      FillRule.NonZero
+    )
+
+    if (unitedPaths.length === 0) return textShapes
+
+    // 4. 統合したパスを外側に縁取り（オフセット/膨張）
+    const scaledOutlineWidth = Math.round(outlineWidth * CLIPPER_SCALE)
+    const outlinedPaths = Clipper.InflatePaths(
+      unitedPaths,
+      scaledOutlineWidth,
       JoinType.Round,
       EndType.Polygon
     )
 
-    // 4. 全パスを統合（Union）
-    const unitedPaths = Clipper.Union(
-      inflatedPaths,
-      undefined,
-      FillRule.NonZero
-    )
+    if (outlinedPaths.length === 0) return textShapes
 
     // 5. 小さな穴を除去（スケーリング済みの面積閾値）
     const scaledMinArea = minHoleArea * CLIPPER_SCALE * CLIPPER_SCALE
     const filteredPaths = new Paths64()
 
-    for (const path of unitedPaths) {
+    for (const path of outlinedPaths) {
       let area = 0
       for (let i = 0; i < path.length; i++) {
         const p1 = path[i]
@@ -402,14 +407,15 @@ export function createFilledTextShapes(
     }
 
     // 6. THREE.Shapeに戻す
-    return clipperPathsToShapes(filteredPaths.length > 0 ? filteredPaths : unitedPaths)
+    return clipperPathsToShapes(filteredPaths.length > 0 ? filteredPaths : outlinedPaths)
   } catch (err) {
-    console.error('Clipper processing failed:', err)
+    console.error('Clipper outline processing failed:', err)
     return textShapes  // エラー時は元のシェイプを返す
   }
 }
 
-// 複数文字をまとめて埋めた形状を生成（文字間も統合）
+// 複数文字をまとめて縁取りした形状を生成（文字間も統合）
+// 縁取り = 文字の輪郭を外側に一定距離だけ拡張した形状
 export function createFilledMultiCharShapes(
   font: opentype.Font,
   chars: string[],
@@ -420,7 +426,7 @@ export function createFilledMultiCharShapes(
 ): THREE.Shape[] {
   if (chars.length === 0) return []
 
-  // 全文字のパスを収集（Paths64形式）
+  // 1. 全文字のパスを収集（Paths64形式、位置情報込み）
   const allPaths = new Paths64()
 
   chars.forEach((char, index) => {
@@ -437,27 +443,32 @@ export function createFilledMultiCharShapes(
   if (allPaths.length === 0) return []
 
   try {
-    // パスをオフセット（膨張）- スケーリング済み
-    const scaledOffset = Math.round(offsetDistance * CLIPPER_SCALE)
-    const inflatedPaths = Clipper.InflatePaths(
-      allPaths,
-      scaledOffset,
-      JoinType.Round,
-      EndType.Polygon
-    )
-
-    // 全パスを統合（Union）- 文字間も統合される
+    // 2. まず全パスを統合（Union）- 文字間も統合される
     const unitedPaths = Clipper.Union(
-      inflatedPaths,
+      allPaths,
       undefined,
       FillRule.NonZero
     )
 
-    // 小さな穴を除去（スケーリング済みの面積閾値）
+    if (unitedPaths.length === 0) return []
+
+    // 3. 統合したパスを外側に縁取り（オフセット/膨張）
+    // 縁取りの幅をスケーリング
+    const scaledOutlineWidth = Math.round(outlineWidth * CLIPPER_SCALE)
+    const outlinedPaths = Clipper.InflatePaths(
+      unitedPaths,
+      scaledOutlineWidth,
+      JoinType.Round,
+      EndType.Polygon
+    )
+
+    if (outlinedPaths.length === 0) return []
+
+    // 4. 小さな穴を除去（スケーリング済みの面積閾値）
     const scaledMinArea = minHoleArea * CLIPPER_SCALE * CLIPPER_SCALE
     const filteredPaths = new Paths64()
 
-    for (const path of unitedPaths) {
+    for (const path of outlinedPaths) {
       let area = 0
       for (let i = 0; i < path.length; i++) {
         const p1 = path[i]
@@ -471,9 +482,220 @@ export function createFilledMultiCharShapes(
       }
     }
 
+    return clipperPathsToShapes(filteredPaths.length > 0 ? filteredPaths : outlinedPaths)
+  } catch (err) {
+    console.error('Clipper multi-char outline processing failed:', err)
+    return []
+  }
+}
+
+// ===============================
+// 自動オフセット計算（文字間距離ベース）
+// ===============================
+
+// THREE.Shape配列を点の配列に変換（距離計算用）
+function shapesToPoints(shapes: THREE.Shape[]): THREE.Vector2[][] {
+  const paths: THREE.Vector2[][] = []
+  
+  for (const shape of shapes) {
+    // 外側輪郭の点を取得
+    const outerPoints = shape.getPoints(20) // サンプリング数20
+    if (outerPoints.length > 0) {
+      paths.push(outerPoints.map(p => new THREE.Vector2(p.x, p.y)))
+    }
+    
+    // 穴の点も取得
+    for (const hole of shape.holes) {
+      const holePoints = hole.getPoints(20)
+      if (holePoints.length > 0) {
+        paths.push(holePoints.map(p => new THREE.Vector2(p.x, p.y)))
+      }
+    }
+  }
+  
+  return paths
+}
+
+// 2つのパス配列間の最小距離を計算
+function minDistanceBetweenPaths(
+  pathsA: THREE.Vector2[][],
+  pathsB: THREE.Vector2[][]
+): number {
+  let minDist = Infinity
+  
+  for (const pathA of pathsA) {
+    for (const pointA of pathA) {
+      for (const pathB of pathsB) {
+        for (const pointB of pathB) {
+          const dist = pointA.distanceTo(pointB)
+          if (dist < minDist) {
+            minDist = dist
+          }
+        }
+      }
+    }
+  }
+  
+  return minDist
+}
+
+// 文字間の最小距離から最適なオフセット量を計算
+export function calculateOptimalOffset(
+  charShapes: THREE.Shape[][],  // [文字1のshapes, 文字2のshapes, ...]
+  margin: number = 0.5,          // 接触後の追加マージン（mm）
+  minOffset: number = 0,         // オフセットの下限
+  maxOffset: number = 5         // オフセットの上限
+): number {
+  if (charShapes.length < 2) {
+    return 0  // 1文字なら膨張不要
+  }
+  
+  // 各文字ペア間の最小距離を取得
+  let minGap = Infinity
+  
+  for (let i = 0; i < charShapes.length - 1; i++) {
+    const pathsA = shapesToPoints(charShapes[i])
+    const pathsB = shapesToPoints(charShapes[i + 1])
+    
+    if (pathsA.length === 0 || pathsB.length === 0) continue
+    
+    const gap = minDistanceBetweenPaths(pathsA, pathsB)
+    if (gap < minGap) {
+      minGap = gap
+    }
+  }
+  
+  // 距離が取得できなかった場合はデフォルト値を返す
+  if (minGap === Infinity || minGap <= 0) {
+    return Math.max(minOffset, Math.min(3, maxOffset)) // デフォルト3mm
+  }
+  
+  // オフセット量 = 隙間の半分 + マージン
+  // 両方の文字が膨張するので、半分ずつ
+  const optimalOffset = (minGap / 2) + margin
+  
+  // 安全弁：計算結果をmin/maxでクリップ
+  const safeOffset = Math.min(
+    Math.max(optimalOffset, minOffset),
+    maxOffset
+  )
+  
+  return safeOffset
+}
+
+// 自動オフセット計算版の複数文字埋め処理
+export function createFilledMultiCharShapesAuto(
+  font: opentype.Font,
+  chars: string[],
+  fontSize: number,
+  charPositions: { x: number; y: number }[],  // 各文字の位置
+  margin: number = 0.5,                      // 接触後の追加マージン（mm）
+  minOffset: number = 0,                     // オフセットの下限
+  maxOffset: number = 5,                     // オフセットの上限
+  minHoleArea: number = 100                  // 小さな穴を除去する閾値
+): THREE.Shape[] {
+  if (chars.length === 0) return []
+  
+  // 1. 各文字を個別にShape化（位置情報なし）
+  const charShapes: THREE.Shape[][] = chars.map(char => 
+    textToShapes(font, char, fontSize)
+  )
+  
+  // 2. 位置情報を適用したShape配列を作成（距離計算用）
+  const positionedShapes: THREE.Shape[][] = []
+  charShapes.forEach((shapes, index) => {
+    const pos = charPositions[index]
+    const positioned: THREE.Shape[] = []
+    
+    shapes.forEach(shape => {
+      const movedShape = new THREE.Shape()
+      const points = shape.getPoints(20)
+      if (points.length > 0) {
+        movedShape.moveTo(points[0].x + pos.x, points[0].y + pos.y)
+        for (let i = 1; i < points.length; i++) {
+          movedShape.lineTo(points[i].x + pos.x, points[i].y + pos.y)
+        }
+        movedShape.closePath()
+        
+        // 穴も移動
+        for (const hole of shape.holes) {
+          const movedHole = new THREE.Path()
+          const holePoints = hole.getPoints(20)
+          if (holePoints.length > 0) {
+            movedHole.moveTo(holePoints[0].x + pos.x, holePoints[0].y + pos.y)
+            for (let i = 1; i < holePoints.length; i++) {
+              movedHole.lineTo(holePoints[i].x + pos.x, holePoints[i].y + pos.y)
+            }
+            movedHole.closePath()
+            movedShape.holes.push(movedHole)
+          }
+        }
+      }
+      positioned.push(movedShape)
+    })
+    
+    positionedShapes.push(positioned)
+  })
+  
+  // 3. 最適なオフセット量を計算
+  const optimalOffset = calculateOptimalOffset(positionedShapes, margin, minOffset, maxOffset)
+  
+  console.log(`文字間距離から計算したオフセット: ${optimalOffset.toFixed(2)}mm`)
+  
+  // 4. 全文字のパスを収集（Paths64形式、位置情報込み）
+  const allPaths = new Paths64()
+  
+  chars.forEach((char, index) => {
+    const shapes = textToShapes(font, char, fontSize)
+    const pos = charPositions[index]
+    
+    // 位置オフセット込みでPaths64に変換
+    const charPaths = shapesToClipperPaths(shapes, pos.x, pos.y)
+    for (const path of charPaths) {
+      allPaths.push(path)
+    }
+  })
+  
+  if (allPaths.length === 0) return []
+  
+  try {
+    // 5. 計算したオフセットで膨張
+    const scaledOffset = Math.round(optimalOffset * CLIPPER_SCALE)
+    const inflatedPaths = Clipper.InflatePaths(
+      allPaths,
+      scaledOffset,
+      JoinType.Round,
+      EndType.Polygon
+    )
+    
+    // 6. 全パスを統合（Union）- 文字間も統合される
+    const unitedPaths = Clipper.Union(
+      inflatedPaths,
+      undefined,
+      FillRule.NonZero
+    )
+    
+    // 7. 小さな穴を除去（スケーリング済みの面積閾値）
+    const scaledMinArea = minHoleArea * CLIPPER_SCALE * CLIPPER_SCALE
+    const filteredPaths = new Paths64()
+    
+    for (const path of unitedPaths) {
+      let area = 0
+      for (let i = 0; i < path.length; i++) {
+        const p1 = path[i]
+        const p2 = path[(i + 1) % path.length]
+        area += p1.x * p2.y - p2.x * p1.y
+      }
+      area = Math.abs(area / 2)
+      
+      if (area >= scaledMinArea || area > scaledMinArea * 0.1) {
+        filteredPaths.push(path)
+      }
+    }
+    
     return clipperPathsToShapes(filteredPaths.length > 0 ? filteredPaths : unitedPaths)
   } catch (err) {
-    console.error('Clipper multi-char processing failed:', err)
+    console.error('Clipper auto-offset processing failed:', err)
     return []
   }
 }
