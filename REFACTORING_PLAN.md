@@ -25,16 +25,16 @@
 
 ## フェーズ1: 基盤整備（リスク低・効果高）
 
-### 1.1 テスト環境構築
+### 1.1 テスト環境構築 ✅
 **目的**: 安全にリファクタリングを進めるための基盤
 
 **タスク**:
-- [ ] Vitest + React Testing Library 導入
-- [ ] `textToShape.ts` の単体テスト作成（最優先）
+- [x] Vitest + React Testing Library 導入
+- [x] `textToShape.ts` の単体テスト作成（最優先）
   - `isClockwise()` のテスト
   - `textToShapes()` のテスト
   - `createFilledMultiCharShapes()` のテスト
-- [ ] テストカバレッジ設定
+- [x] テストカバレッジ設定
 
 **追加パッケージ**:
 ```bash
@@ -45,7 +45,7 @@ npm install -D vitest @testing-library/react @testing-library/jest-dom jsdom @vi
 
 ---
 
-### 1.2 マジックナンバー定数化
+### 1.2 マジックナンバー定数化 ✅
 **目的**: コードの可読性・保守性向上
 
 **対象箇所**:
@@ -73,11 +73,11 @@ segments: 5                  // → BEZIER_SEGMENTS
 
 ---
 
-### 1.3 console.log 削除・ロガー導入
+### 1.3 console.log 削除・ロガー導入 ✅
 **目的**: 本番環境でのデバッグ情報制御
 
 **タスク**:
-- [ ] `textToShape.ts:301-311` の console.log 削除
+- [x] `textToShape.ts:643` の console.log 削除
 - [ ] 開発時のみ有効なロガーユーティリティ作成（オプション）
 
 **推定作業量**: 極小
@@ -86,7 +86,7 @@ segments: 5                  // → BEZIER_SEGMENTS
 
 ## フェーズ2: コード分割（リスク中・効果高）
 
-### 2.1 Drawing2D.tsx の分割
+### 2.1 Drawing2D.tsx の分割 ✅
 **目的**: 1069行 → 各200行以下に分割
 
 **現在の構造**:
