@@ -27,9 +27,10 @@ Ice CADは**Cloudflare Pages**で運用しています。
 - **自動デプロイ**: 有効
 
 ### プレビュー環境
-- **URL**: `https://[commit-hash].ice-cad.pages.dev`
+- **URL**: プルリクエストごとに一意のURL（例: `https://a1b2c3d4.ice-cad.pages.dev`）
 - **トリガー**: プルリクエストの作成/更新
 - **自動デプロイ**: 有効
+- **URL確認方法**: PRのコメント欄にCloudflareボットが自動投稿
 
 ---
 
@@ -60,7 +61,7 @@ Node.js version: 18 (package.jsonのenginesで指定)
    git push origin feature/xxx
 
 3. プレビュー環境で確認
-   https://[commit-hash].ice-cad.pages.dev
+   PRコメント欄のCloudflareボット投稿からURLを確認
 
 4. mainブランチにマージ
    GitHub UIでMerge
