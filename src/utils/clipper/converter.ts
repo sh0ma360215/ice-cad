@@ -85,6 +85,7 @@ export function clipperPathsToShapes(paths: Paths64): THREE.Shape[] {
 
     // この外側に含まれる穴を探す
     for (const inner of innerPaths) {
+      if (inner.path.length === 0) continue  // 空配列をスキップ
       if (isPointInPath64(inner.path[0], outer.path)) {
         const holePath = new THREE.Path()
         holePath.moveTo(inner.path[0].x / CLIPPER_SCALE, inner.path[0].y / CLIPPER_SCALE)

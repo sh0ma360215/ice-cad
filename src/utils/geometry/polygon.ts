@@ -13,6 +13,9 @@ export function isClockwise(points: THREE.Vector2[]): boolean {
 
 // 点群の中心を取得
 export function getCenter(points: THREE.Vector2[]): THREE.Vector2 {
+  if (points.length === 0) {
+    return new THREE.Vector2(0, 0)
+  }
   let x = 0, y = 0
   for (const p of points) {
     x += p.x

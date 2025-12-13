@@ -157,6 +157,7 @@ export function minDistanceBetweenPaths(
   pathsA: THREE.Vector2[][],
   pathsB: THREE.Vector2[][]
 ): number {
+  const EPSILON = 0.01  // 0.01mm以下なら即座に返す（早期脱出）
   let minDist = Infinity
 
   for (const pathA of pathsA) {
@@ -164,6 +165,7 @@ export function minDistanceBetweenPaths(
       for (const pathB of pathsB) {
         for (const pointB of pathB) {
           const dist = pointA.distanceTo(pointB)
+          if (dist < EPSILON) return dist  // 早期脱出
           if (dist < minDist) {
             minDist = dist
           }

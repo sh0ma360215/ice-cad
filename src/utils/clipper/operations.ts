@@ -1,9 +1,23 @@
 import * as THREE from 'three'
 import opentype from 'opentype.js'
-import { Clipper, Paths64, FillRule, JoinType, EndType } from 'clipper2-js'
+import { Clipper, Path64, Paths64, FillRule, JoinType, EndType } from 'clipper2-js'
 import { CLIPPER_SCALE, FILL_TEXT_DEFAULTS } from '../../constants/geometry'
 import { textToShapes, calculateOptimalOffset } from '../geometry'
 import { shapesToClipperPaths, clipperPathsToShapes } from './converter'
+
+// 穴の面積許容比率（最小面積の10%までは保持）
+const HOLE_AREA_TOLERANCE_RATIO = 0.1
+
+// Path64の面積を計算（Shoelace formula）
+function calculatePathArea(path: Path64): number {
+  let area = 0
+  for (let i = 0; i < path.length; i++) {
+    const p1 = path[i]
+    const p2 = path[(i + 1) % path.length]
+    area += p1.x * p2.y - p2.x * p1.y
+  }
+  return Math.abs(area / 2)
+}
 
 // 文字を縁取りした形状を生成（単一文字用）
 // 縁取り = 文字の輪郭を外側に一定距離だけ拡張した形状
@@ -48,16 +62,10 @@ export function createFilledTextShapes(
     const filteredPaths = new Paths64()
 
     for (const path of outlinedPaths) {
-      let area = 0
-      for (let i = 0; i < path.length; i++) {
-        const p1 = path[i]
-        const p2 = path[(i + 1) % path.length]
-        area += p1.x * p2.y - p2.x * p1.y
-      }
-      area = Math.abs(area / 2)
+      const area = calculatePathArea(path)
 
       // 外側パス、または十分大きな穴のみ保持
-      if (area >= scaledMinArea || area > scaledMinArea * 0.1) {
+      if (area >= scaledMinArea || area > scaledMinArea * HOLE_AREA_TOLERANCE_RATIO) {
         filteredPaths.push(path)
       }
     }
@@ -125,15 +133,9 @@ export function createFilledMultiCharShapes(
     const filteredPaths = new Paths64()
 
     for (const path of outlinedPaths) {
-      let area = 0
-      for (let i = 0; i < path.length; i++) {
-        const p1 = path[i]
-        const p2 = path[(i + 1) % path.length]
-        area += p1.x * p2.y - p2.x * p1.y
-      }
-      area = Math.abs(area / 2)
+      const area = calculatePathArea(path)
 
-      if (area >= scaledMinArea || area > scaledMinArea * 0.1) {
+      if (area >= scaledMinArea || area > scaledMinArea * HOLE_AREA_TOLERANCE_RATIO) {
         filteredPaths.push(path)
       }
     }
@@ -240,15 +242,9 @@ export function createFilledMultiCharShapesAuto(
     const filteredPaths = new Paths64()
 
     for (const path of unitedPaths) {
-      let area = 0
-      for (let i = 0; i < path.length; i++) {
-        const p1 = path[i]
-        const p2 = path[(i + 1) % path.length]
-        area += p1.x * p2.y - p2.x * p1.y
-      }
-      area = Math.abs(area / 2)
+      const area = calculatePathArea(path)
 
-      if (area >= scaledMinArea || area > scaledMinArea * 0.1) {
+      if (area >= scaledMinArea || area > scaledMinArea * HOLE_AREA_TOLERANCE_RATIO) {
         filteredPaths.push(path)
       }
     }
