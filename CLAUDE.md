@@ -118,3 +118,37 @@ The codebase follows a modular structure:
 3. **Maximum file size**: Target 200-300 lines per file for maintainability
 4. **Centralized constants**: All magic numbers are extracted to domain-specific constant files
 5. **Pure functions**: Utilities (drawing, geometry) are pure functions for testability
+
+## Deployment
+
+Ice CAD is deployed on **Cloudflare Pages**. See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed deployment guide.
+
+**Production URL**: https://ice-cad.pages.dev
+
+### Deployment Flow
+
+```
+main branch push/merge → Cloudflare Pages auto-build → Production deploy
+PR creation/update → Preview deploy (auto-generated URL)
+```
+
+### Build Configuration (Cloudflare Pages)
+
+```
+Framework preset: React (Vite)
+Build command: npm run build
+Build output directory: dist
+Node.js version: 18 (specified in package.json engines)
+```
+
+### Local Production Build Test
+
+```bash
+npm run build    # Production build
+npm run preview  # Preview build locally (http://localhost:4173)
+```
+
+### Configuration Files
+
+- `.node-version` - Node.js 18 requirement for build environments
+- `package.json` - engines field specifies Node.js >=18.0.0

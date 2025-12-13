@@ -142,6 +142,35 @@ npm run test:run
 npm run test:coverage
 ```
 
+## デプロイ
+
+### 本番環境: Cloudflare Pages
+
+Ice CADは**Cloudflare Pages**でホスティングされています。
+
+- 🌐 **本番URL**: https://ice-cad.pages.dev
+- ✅ **完全無料** - 無制限の帯域幅
+- 🚀 **自動デプロイ** - `main`ブランチへのpush/mergeで自動
+
+#### デプロイフロー
+
+```
+1. feature ブランチで開発
+2. プルリクエスト作成
+3. プレビュー環境で確認（自動生成）
+4. main にマージ
+5. 本番環境に自動デプロイ 🎉
+```
+
+#### ローカルで本番ビルドをテスト
+
+```bash
+npm run build    # 本番ビルド
+npm run preview  # ビルド結果をプレビュー
+```
+
+詳細なデプロイガイドについては、[DEPLOYMENT.md](./DEPLOYMENT.md)を参照してください。
+
 ## ライセンス
 
 このプロジェクトはプライベートプロジェクトです。
