@@ -10,7 +10,9 @@ import {
 } from '../constants/mesh'
 import { TEXT_SIZE } from '../constants/geometry'
 import { Html } from '@react-three/drei'
-import { loadFont, textToShapes, createFilledMultiCharShapes, getTextBounds } from '../utils/textToShape'
+import { loadFont } from '../utils/font'
+import { textToShapes, getTextBounds } from '../utils/geometry'
+import { createFilledMultiCharShapes } from '../utils/clipper'
 import opentype from 'opentype.js'
 
 interface MoldMeshProps {
