@@ -29,37 +29,59 @@ npm run test:coverage  # Run tests with coverage report
 
 ### Key Components
 
-- **App.tsx**: Main component with 2D/3D view toggle, parameter controls
-- **Drawing2D.tsx**: Canvas-based 2D CAD drawing with 6 views (side section, top, front section, depth section, design, bottom) and dimension lines. Exposes `exportPNG()` via forwardRef
+- **App.tsx**: Main component with 2D/3D view toggle, parameter controls (252 lines)
+- **Drawing2D.tsx**: Canvas-based 2D CAD drawing component (128 lines). Delegates drawing logic to `utils/drawing/` modules. Exposes `exportPNG()` via forwardRef
 - **MoldPreview.tsx**: Three.js canvas wrapper with OrbitControls and Environment
 - **MoldMesh.tsx**: 3D geometry generation using ExtrudeGeometry for text shapes
-- **constants/**: Module containing `FIXED_PARAMS` (manufacturing specs), `VariableParams` interface, and other configuration constants organized by domain (manufacturing, geometry, drawing, mesh)
+
+### Constants Organization
+
+Constants are organized by domain in `src/constants/`:
+- **manufacturing.ts**: `FIXED_PARAMS` - physical dimensions, angles, radii for mold production
+- **geometry.ts**: Font processing constants - `FONT_URL`, `CLIPPER_SCALE`, `BEZIER_SEGMENTS`, etc.
+- **drawing.ts**: 2D canvas drawing constants - `CANVAS`, `LAYOUT`, `FONTS`, `COLORS`
+- **mesh.ts**: 3D mesh constants - `STICK_DIMENSIONS`, `ICE_EXTRUDE_SETTINGS`, `MESH_COLORS`
+- **index.ts**: Exports `FIXED_PARAMS`, `VariableParams` interface, and defaults
+
+### Drawing Utils Module (`src/utils/drawing/`)
+
+2D CAD drawing functions are organized by concern:
+- **border.ts**: `drawBorder()`, `drawTitleBlock()` - outer frame and title block
+- **sections.ts**: `drawSideSection()`, `drawFrontSection()`, `drawDepthSection()` - cross-section views
+- **views.ts**: `drawTopView()`, `drawDesignView()`, `drawBottomView()` - plan/elevation views
+- **dimensions.ts**: `drawDimensionH()`, `drawDimensionV()`, `drawArrowH()`, `drawArrowV()` - dimension lines and arrows
+- **text.ts**: `drawTextWithHatching()`, `drawTextOutlineInView()` - text rendering with hatching patterns
+- **primitives.ts**: `roundedRect()` - low-level drawing primitives
+- **index.ts**: Exports all drawing functions
 
 ### Font Processing (Critical Path)
 
 Japanese text → 3D shapes conversion in `src/utils/textToShape.ts`:
-1. Load font with `opentype.js` from `/fonts/NotoSansJP-Bold.otf`
-2. `textToShapes()`: Convert font path commands (M/L/C/Q/Z) to `THREE.Shape[]`
-3. Bezier curves approximated to line segments (5 segments per curve)
-4. Clockwise/counter-clockwise detection for hole identification in kanji characters
-5. Optional: `createFilledMultiCharShapes()` uses clipper2-js to inflate and merge character paths
+1. **Font loading**: `loadFont()` caches font with `opentype.js` from `/fonts/NotoSansJP-Bold.otf`
+2. **Shape conversion**: `textToShapes()` converts font path commands (M/L/C/Q/Z) to `THREE.Shape[]`
+3. **Bezier approximation**: Curves approximated to line segments (5 segments per curve via `BEZIER_SEGMENTS`)
+4. **Hole detection**: Clockwise/counter-clockwise detection using Shoelace formula for kanji character holes
+5. **Text filling** (optional): `createFilledMultiCharShapes()` uses clipper2-js to inflate and merge character paths
+6. **Auto-offset**: `createFilledMultiCharShapesAuto()` calculates optimal offset based on character spacing
 
 ### Key Technical Details
 
-- Font file: `public/fonts/NotoSansJP-Bold.otf` (16.2MB, local file required)
-- opentype.js supports TTF, OTF, WOFF only (NOT WOFF2)
-- Japanese text rendered vertically (characters split and arranged top-to-bottom)
-- Hole detection uses signed area calculation (Shoelace formula) and point-in-polygon tests (ray casting)
-- clipper2-js uses integer coordinates with CLIPPER_SCALE=1000 for precision
+- **Font file**: `public/fonts/NotoSansJP-Bold.otf` (16.2MB, local file required)
+- **Font support**: opentype.js supports TTF, OTF, WOFF only (NOT WOFF2)
+- **Text layout**: Japanese text rendered vertically (characters split and arranged top-to-bottom)
+- **Hole detection**: Signed area calculation (Shoelace formula) + point-in-polygon tests (ray casting)
+- **Clipper precision**: Uses integer coordinates with `CLIPPER_SCALE=1000` for sub-millimeter precision
+- **Shape conversion**: `SHAPE_POINTS_DIVISIONS=12` for THREE.Shape to clipper path conversion
 
-## Manufacturing Parameters
+### Manufacturing Parameters
 
 Fixed specs in `FIXED_PARAMS` (`src/constants/manufacturing.ts`):
-- Container dimensions: 76.91×113.91mm (outer), 70×107mm (inner)
-- Cavity (text area): 57.90×97.30mm
-- Depth: 24.5mm, Text depth: 3mm
-- Taper angles: 8° (outer), 4° (stick area)
-- Corner radius: R9.46 (outer), R6 (inner), Flange width: 3.455mm
+- **Container**: 76.91×113.91mm (outer), 70×107mm (inner)
+- **Cavity** (text area): 57.90×97.30mm
+- **Depth**: 24.5mm total, 3mm text depth
+- **Taper angles**: 8° (outer wall), 4° (stick area)
+- **Corner radii**: R9.46 (outer), R6 (inner)
+- **Flange**: 3.455mm width
 
 ## Tech Stack
 
@@ -68,3 +90,31 @@ Fixed specs in `FIXED_PARAMS` (`src/constants/manufacturing.ts`):
 - opentype.js (font parsing)
 - clipper2-js (polygon offsetting/union for text fill)
 - Tailwind CSS (styling)
+- Vitest + @testing-library/react (testing)
+
+## Testing
+
+Unit tests focus on geometry/font utilities in `src/utils/textToShape.test.ts`:
+- `isClockwise()` - polygon orientation detection
+- `approximateCubicBezier()`, `approximateQuadraticBezier()` - curve approximation
+- `getCenter()` - polygon centroid calculation
+- `isPointInPolygon()` - point-in-polygon ray casting
+
+Run single test file:
+```bash
+npx vitest run src/utils/textToShape.test.ts
+```
+
+Run tests matching pattern:
+```bash
+npx vitest run -t "isClockwise"
+```
+
+## Code Organization Principles
+
+The codebase follows a modular structure:
+1. **Separation by domain**: Constants, components, and utilities are organized by their domain (drawing, geometry, manufacturing, mesh)
+2. **Single responsibility**: Each module has a focused purpose (e.g., `border.ts` only handles border/frame drawing)
+3. **Maximum file size**: Target 200-300 lines per file for maintainability
+4. **Centralized constants**: All magic numbers are extracted to domain-specific constant files
+5. **Pure functions**: Utilities (drawing, geometry) are pure functions for testability
