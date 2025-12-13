@@ -121,18 +121,34 @@ The codebase follows a modular structure:
 
 ## Deployment
 
-This is a static site (no backend) that can be deployed to any static hosting platform. See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed deployment options and cost analysis.
+Ice CAD is deployed on **Cloudflare Pages**. See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed deployment guide.
 
-**Recommended platform**: Cloudflare Pages (free, unlimited bandwidth)
+**Production URL**: https://ice-cad.pages.dev
 
-Quick production build test:
-```bash
-npm run build    # Production build
-npm run preview  # Preview build locally
+### Deployment Flow
+
+```
+main branch push/merge → Cloudflare Pages auto-build → Production deploy
+PR creation/update → Preview deploy (auto-generated URL)
 ```
 
-Configuration files included:
-- `.node-version` - Node.js version for build environments
-- `vercel.json` - Vercel deployment config
-- `netlify.toml` - Netlify deployment config
-- `.cloudflare-pages.toml` - Cloudflare Pages config (optional, auto-detected)
+### Build Configuration (Cloudflare Pages)
+
+```
+Framework preset: React (Vite)
+Build command: npm run build
+Build output directory: dist
+Node.js version: 18 (specified in package.json engines)
+```
+
+### Local Production Build Test
+
+```bash
+npm run build    # Production build
+npm run preview  # Preview build locally (http://localhost:4173)
+```
+
+### Configuration Files
+
+- `.node-version` - Node.js 18 requirement for build environments
+- `package.json` - engines field specifies Node.js >=18.0.0

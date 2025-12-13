@@ -1,9 +1,0 @@
-# Cloudflare Pages configuration
-# This file is optional - Cloudflare Pages auto-detects Vite projects
-
-[build]
-command = "npm run build"
-destination = "dist"
-
-[build.environment]
-NODE_VERSION = "18"

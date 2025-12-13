@@ -1,240 +1,258 @@
-# Ice CAD デプロイ計画
+# Ice CAD デプロイガイド
 
-## プロジェクト特性
+## デプロイ先: Cloudflare Pages
 
-- **タイプ**: 静的サイト（React + Vite）
-- **バックエンド**: なし（完全フロントエンド）
-- **主要アセット**: 日本語フォント（17MB）
-- **ビルド出力**: 静的HTML/CSS/JS + アセット
+Ice CADは**Cloudflare Pages**で運用しています。
 
-## デプロイオプション比較
+### なぜCloudflare Pages？
 
-### 🥇 推奨: Cloudflare Pages
-
-**メリット:**
-- ✅ **完全無料** - 無制限の帯域幅（最重要）
+- ✅ **完全無料** - 無制限の帯域幅
 - ✅ **高速CDN** - 世界中に配信拠点
 - ✅ **簡単デプロイ** - GitHubと連携、自動ビルド
-- ✅ **無制限リクエスト** - 17MBのフォントファイルでも問題なし
-- ✅ **高速ビルド** - 月500回まで無料
+- ✅ **大容量対応** - 17MBフォントファイルでも問題なし
 
-**無料枠:**
-- ビルド: 500回/月
-- 帯域幅: **無制限**
-- リクエスト: **無制限**
-- カスタムドメイン: 対応
+### コスト
 
-**デプロイ手順:**
-1. Cloudflareアカウント作成
-2. GitHubリポジトリと連携
-3. ビルド設定（自動検出）
-4. デプロイ完了
+- **月額**: $0（完全無料）
+- **帯域**: 無制限
+- **ビルド**: 500回/月まで無料
 
 ---
 
-### 🥈 次点: Vercel
+## デプロイ済み環境
 
-**メリット:**
-- ✅ **Viteネイティブサポート** - 設定不要
-- ✅ **自動HTTPS** - SSL証明書自動
-- ✅ **プレビューデプロイ** - PRごとにプレビュー環境
-- ✅ **高速CDN**
+### 本番環境
+- **URL**: https://ice-cad.pages.dev
+- **トリガー**: `main`ブランチへのpush/merge
+- **自動デプロイ**: 有効
 
-**無料枠:**
-- ビルド: 6000分/月
-- 帯域幅: **100GB/月** ⚠️
-- カスタムドメイン: 対応
-
-**注意点:**
-- 17MBフォント × アクセス数で帯域制限に注意
-- 月間アクセスが多い場合はCloudflareの方が安全
-
-**デプロイ手順:**
-1. Vercelアカウント作成
-2. GitHubリポジトリと連携
-3. 自動検出でデプロイ完了
+### プレビュー環境
+- **URL**: `https://[commit-hash].ice-cad.pages.dev`
+- **トリガー**: プルリクエストの作成/更新
+- **自動デプロイ**: 有効
 
 ---
 
-### 🥉 代替: Netlify
+## ビルド設定
 
-**メリット:**
-- ✅ **簡単デプロイ**
-- ✅ **フォーム機能**（将来的に使える）
-- ✅ **CDN**
+Cloudflare Pagesダッシュボードで設定済み：
 
-**無料枠:**
-- ビルド: 300分/月
-- 帯域幅: **100GB/月** ⚠️
-
-**注意点:**
-- Vercelと同じく帯域制限あり
-
----
-
-### 💰 その他オプション
-
-#### GitHub Pages
-- **コスト**: 完全無料
-- **デメリット**:
-  - 手動設定が必要
-  - カスタムドメインが面倒
-  - CDNなし
-- **推奨度**: ❌ 他の方が楽
-
-#### AWS S3 + CloudFront
-- **コスト**: 月1-5ドル程度
-- **デメリット**:
-  - 設定が複雑
-  - AWSアカウント必要
-- **推奨度**: ❌ オーバースペック
-
----
-
-## 最終推奨: Cloudflare Pages
-
-### 理由
-1. **完全無料で帯域無制限** - 17MBフォントの配信に最適
-2. **Vercel並みの簡単さ** - GitHub連携で自動デプロイ
-3. **高速グローバルCDN** - パフォーマンス良好
-4. **スケーラビリティ** - アクセス増加に対応
-
-### セットアップ手順
-
-#### 1. ビルド設定確認
-
-現在のビルドコマンド:
-```bash
-npm run build  # tsc -b && vite build
 ```
-
-出力ディレクトリ:
+Framework preset: React (Vite)
+Build command: npm run build
+Build output directory: dist
+Root directory: /
+Node.js version: 18 (package.jsonのenginesで指定)
 ```
-dist/
-```
-
-#### 2. Cloudflare Pages設定
-
-**ビルド設定:**
-- Framework preset: `Vite`
-- Build command: `npm run build`
-- Build output directory: `dist`
-- Node version: `18` (package.jsonで指定推奨)
-
-#### 3. 環境変数（必要な場合）
-
-現時点では不要（完全静的サイト）
-
-#### 4. カスタムドメイン（オプション）
-
-Cloudflareでドメイン管理すると連携が簡単:
-- example.com → 本番環境
-- *.pages.dev → 自動提供されるURL
 
 ---
 
 ## デプロイフロー
 
 ### 本番デプロイ
-```
-main ブランチへのpush/merge
-  ↓
-Cloudflare Pages自動ビルド
-  ↓
-本番環境デプロイ
-  ↓
-https://ice-cad.pages.dev
-```
 
-### プレビューデプロイ
 ```
-feature ブランチへのpush
-  ↓
-Cloudflare Pages自動ビルド
-  ↓
-プレビュー環境デプロイ
-  ↓
-https://[commit-hash].ice-cad.pages.dev
+1. ローカルで開発・テスト
+   npm run dev
+
+2. プルリクエスト作成
+   git checkout -b feature/xxx
+   git push origin feature/xxx
+
+3. プレビュー環境で確認
+   https://[commit-hash].ice-cad.pages.dev
+
+4. mainブランチにマージ
+   GitHub UIでMerge
+
+5. 本番環境に自動デプロイ 🚀
+   https://ice-cad.pages.dev
 ```
 
----
+### ローカルで本番ビルドをテスト
 
-## パフォーマンス最適化
+```bash
+# 本番ビルド
+npm run build
 
-### フォントファイル最適化（将来的）
-
-17MBのフォントは大きいため、将来的に最適化を検討:
-
-1. **サブセット化**
-   - 必要な文字だけ抽出
-   - pyftsubset（fonttools）使用
-   - 推定削減: 17MB → 1-2MB
-
-2. **WOFF2変換**
-   - 現在: OTF（17MB）
-   - 変換後: WOFF2（推定5-7MB）
-   - ⚠️ opentype.jsはWOFF2非対応のため要確認
-
-3. **CDN最適化**
-   - Cloudflareの自動圧縮（Brotli/Gzip）有効
-   - キャッシュヘッダー最適化
-
----
-
-## コスト試算
-
-### Cloudflare Pages（推奨）
-- **月額**: $0
-- **帯域**: 無制限
-- **ビルド**: 500回/月まで無料（超過後$0.50/500回）
-
-### 想定シナリオ
-- 月間訪問者: 1000人
-- 1人あたり転送量: 20MB（フォント含む）
-- 月間転送量: 20GB
-- **コスト: $0** ✅
-
-### スケール時
-- 月間訪問者: 10,000人
-- 月間転送量: 200GB
-- Cloudflare: **$0** ✅
-- Vercel: 超過（100GB制限）→ 有料プラン$20/月 ❌
-
----
-
-## 次のステップ
-
-1. ✅ デプロイ計画策定（このドキュメント）
-2. ⬜ Cloudflareアカウント作成
-3. ⬜ GitHubリポジトリ連携
-4. ⬜ 初回デプロイテスト
-5. ⬜ カスタムドメイン設定（オプション）
-6. ⬜ README.mdにデプロイ手順追記
+# ビルド結果をプレビュー
+npm run preview
+# → http://localhost:4173
+```
 
 ---
 
 ## トラブルシューティング
 
-### ビルドエラー
-```bash
-# ローカルで本番ビルドテスト
-npm run build
-npm run preview
-```
+### ビルドエラーが発生した場合
+
+1. **ローカルでビルドテスト**
+   ```bash
+   npm run build
+   ```
+
+2. **Node.jsバージョン確認**
+   - ローカル: Node.js 18以上
+   - Cloudflare Pages: 自動的に18を使用
+
+3. **依存関係の再インストール**
+   ```bash
+   rm -rf node_modules package-lock.json
+   npm install
+   npm run build
+   ```
+
+4. **Cloudflareのビルドログを確認**
+   - Cloudflare Pagesダッシュボード → Deployments → ビルドログ
 
 ### フォント読み込みエラー
-- publicディレクトリがビルド時に正しくコピーされているか確認
-- Network tabでフォントファイルのパスを確認
+
+- `public/fonts/NotoSansJP-Bold.otf`が正しく配置されているか確認
+- ブラウザのNetwork tabでフォントファイルのパスを確認
+- パス: `/fonts/NotoSansJP-Bold.otf`（絶対パス）
 
 ### 大容量アセット警告
-- Viteの警告は無視してOK（フォントファイルは必須）
-- 将来的にサブセット化で対応
+
+```
+(!) Some chunks are larger than 500 kB after minification.
+```
+
+→ **無視してOK**（フォントファイル17MBは必須アセット）
+
+---
+
+## パフォーマンス
+
+### 現在の転送サイズ
+
+- **HTML**: 0.5 KB (gzip: 0.37 KB)
+- **CSS**: 13 KB (gzip: 3.2 KB)
+- **JavaScript**: 1.3 MB (gzip: 374 KB)
+- **フォント**: 17 MB
+- **合計**: 約18 MB
+
+### 最適化済み
+
+- ✅ Cloudflare自動圧縮（Brotli/Gzip）有効
+- ✅ CDNキャッシング有効
+- ✅ HTTPSデフォルト
+
+### 将来的な最適化案
+
+#### 1. フォントのサブセット化
+```bash
+# 必要な文字だけ抽出
+pyftsubset NotoSansJP-Bold.otf \
+  --text="鎌倉渋谷..." \
+  --output-file="NotoSansJP-Bold-subset.otf"
+```
+**効果**: 17MB → 1-2MB
+
+#### 2. Code Splitting
+```typescript
+// 動的インポート
+const MoldMesh = lazy(() => import('./components/MoldMesh'))
+```
+**効果**: 初期ロード時間短縮
+
+---
+
+## 新しい環境を作る場合
+
+別のCloudflare Pagesプロジェクトを作成する手順：
+
+### 1. Cloudflareダッシュボード
+
+https://dash.cloudflare.com/ → Pages → Create a project
+
+### 2. GitHubリポジトリを接続
+
+- リポジトリ選択: `sh0ma360215/ice-cad`
+
+### 3. ビルド設定
+
+```
+Framework preset: React (Vite)
+Build command: npm run build
+Build output directory: dist
+Root directory: /
+```
+
+### 4. 環境変数（不要）
+
+現時点では環境変数は不要（完全静的サイト）
+
+### 5. デプロイ
+
+Save and Deploy → 完了！
+
+---
+
+## カスタムドメイン設定（オプション）
+
+Cloudflareでドメインを管理している場合：
+
+1. **Pagesダッシュボード** → Custom domains
+2. **Add a custom domain**
+3. ドメイン入力（例: `ice-cad.example.com`）
+4. DNS設定が自動適用
+5. HTTPS証明書が自動発行
+
+---
+
+## セキュリティ
+
+- ✅ HTTPS強制（自動）
+- ✅ SSL証明書自動更新
+- ✅ DDoS保護（Cloudflareネットワーク）
+- ✅ WAF（Web Application Firewall）オプション
+
+---
+
+## モニタリング
+
+### アクセス統計
+
+Cloudflare Pagesダッシュボード → Analytics
+
+- ページビュー数
+- 帯域使用量
+- ビルド回数
+- エラー率
+
+### アラート設定
+
+- ビルド失敗時の通知
+- カスタムドメインのSSL更新通知
+
+---
+
+## バックアップ・ロールバック
+
+### ロールバック
+
+Cloudflare Pagesは全デプロイ履歴を保持：
+
+1. Deployments → 履歴から選択
+2. **Rollback to this deployment**
+3. 即座に以前のバージョンに戻る
+
+### ソースコード
+
+- GitHub上に全履歴が保存
+- タグ/リリースで管理可能
 
 ---
 
 ## まとめ
 
-- **推奨プラットフォーム**: Cloudflare Pages
-- **月額コスト**: $0（無制限帯域）
-- **デプロイ難易度**: ⭐⭐☆☆☆（Vercel並みに簡単）
-- **スケーラビリティ**: ⭐⭐⭐⭐⭐（完璧）
+| 項目 | 内容 |
+|------|------|
+| **プラットフォーム** | Cloudflare Pages |
+| **本番URL** | https://ice-cad.pages.dev |
+| **月額コスト** | $0（無制限帯域） |
+| **デプロイ方法** | GitHubプッシュで自動 |
+| **ビルド時間** | 約1-2分 |
+| **ロールバック** | ワンクリック |
+
+Cloudflare Pagesにより、**完全無料**で**スケーラブル**なホスティングを実現しています。
