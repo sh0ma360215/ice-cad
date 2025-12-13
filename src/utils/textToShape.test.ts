@@ -2,11 +2,13 @@ import { describe, it, expect } from 'vitest'
 import * as THREE from 'three'
 import {
   isClockwise,
-  approximateCubicBezier,
-  approximateQuadraticBezier,
   getCenter,
   isPointInPolygon,
-} from './textToShape'
+} from './geometry/polygon'
+import {
+  approximateCubicBezier,
+  approximateQuadraticBezier,
+} from './geometry/bezier'
 
 describe('isClockwise', () => {
   it('時計回りの正方形を正しく判定する', () => {

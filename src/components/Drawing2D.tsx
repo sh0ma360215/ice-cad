@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, forwardRef, useImperativeHandle } from 'react'
 import { VariableParams, FIXED_PARAMS } from '../constants'
 import { CANVAS, LAYOUT, FONTS, COLORS } from '../constants/drawing'
-import { loadFont } from '../utils/textToShape'
+import { loadFont } from '../utils/font'
 import {
   drawBorder,
   drawTitleBlock,
