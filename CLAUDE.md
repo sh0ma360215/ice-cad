@@ -118,3 +118,21 @@ The codebase follows a modular structure:
 3. **Maximum file size**: Target 200-300 lines per file for maintainability
 4. **Centralized constants**: All magic numbers are extracted to domain-specific constant files
 5. **Pure functions**: Utilities (drawing, geometry) are pure functions for testability
+
+## Deployment
+
+This is a static site (no backend) that can be deployed to any static hosting platform. See [DEPLOYMENT.md](./DEPLOYMENT.md) for detailed deployment options and cost analysis.
+
+**Recommended platform**: Cloudflare Pages (free, unlimited bandwidth)
+
+Quick production build test:
+```bash
+npm run build    # Production build
+npm run preview  # Preview build locally
+```
+
+Configuration files included:
+- `.node-version` - Node.js version for build environments
+- `vercel.json` - Vercel deployment config
+- `netlify.toml` - Netlify deployment config
+- `.cloudflare-pages.toml` - Cloudflare Pages config (optional, auto-detected)

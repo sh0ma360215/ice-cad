@@ -142,6 +142,35 @@ npm run test:run
 npm run test:coverage
 ```
 
+## デプロイ
+
+### 推奨: Cloudflare Pages（完全無料）
+
+Ice CADは静的サイトとして簡単にデプロイできます。**Cloudflare Pages**を推奨します：
+
+- ✅ **完全無料** - 無制限の帯域幅
+- ✅ **簡単デプロイ** - GitHubと連携、自動ビルド
+- ✅ **高速CDN** - 世界中に配信
+
+#### クイックスタート
+
+1. [Cloudflare Pages](https://pages.cloudflare.com/)でアカウント作成
+2. GitHubリポジトリを接続
+3. ビルド設定（自動検出）:
+   - Framework preset: `Vite`
+   - Build command: `npm run build`
+   - Build output directory: `dist`
+4. デプロイ完了！
+
+詳細なデプロイ計画と他のオプション（Vercel、Netlifyなど）については、[DEPLOYMENT.md](./DEPLOYMENT.md)を参照してください。
+
+### ローカルで本番ビルドをテスト
+
+```bash
+npm run build    # 本番ビルド
+npm run preview  # ビルド結果をプレビュー
+```
+
 ## ライセンス
 
 このプロジェクトはプライベートプロジェクトです。
