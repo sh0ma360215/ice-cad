@@ -13,7 +13,19 @@
       "Bash(npm run test:run:*)",
       "Bash(npm run test:coverage:*)",
       "Bash(npm run build:*)",
-      "Bash(git add:*)"
+      "Bash(git add:*)",
+      "Bash(git checkout:*)",
+      "Bash(git cherry-pick:*)",
+      "Bash(git push:*)",
+      "Bash(gh pr create:*)",
+      "Bash(mkdir:*)",
+      "Bash(npx vitest run)",
+      "Bash(git rm:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nRefactor textToShape.ts: Split into modular structure (Phase 2.2)\n\nOrganized the 700-line textToShape.ts file into three focused modules:\n\n**New Structure:**\n- src/utils/font/: Font loading logic\n  - loader.ts: loadFont() with caching\n  - index.ts: Module exports\n\n- src/utils/geometry/: Geometric calculations\n  - bezier.ts: Bezier curve approximations\n  - polygon.ts: Polygon utilities (isClockwise, getCenter, isPointInPolygon)\n  - shape.ts: THREE.Shape generation and text bounds\n  - index.ts: Module exports\n\n- src/utils/clipper/: Clipper2 operations\n  - converter.ts: THREE.Shape ↔ Clipper Paths64 conversion\n  - operations.ts: Text outline and fill operations\n  - index.ts: Module exports\n\n**Benefits:**\n- Improved code organization (700 lines → max 200 lines per file)\n- Better separation of concerns (font, geometry, clipper)\n- Easier to test and maintain\n- All existing tests pass (16/16 ✓)\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude Sonnet 4.5 <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git commit:*)",
+      "Bash(git branch:*)",
+      "Bash(git worktree:*)",
+      "Bash(git fetch:*)"
     ]
   }
 }
