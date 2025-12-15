@@ -7,3 +7,4 @@ export {
   minDistanceBetweenPaths,
   calculateOptimalOffset
 } from './shape'
+export { createBaseGeometry } from './base'

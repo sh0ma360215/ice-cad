@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import MoldPreview from './components/MoldPreview'
+import MoldPreview, { MoldPreviewHandle } from './components/MoldPreview'
 import Drawing2D, { Drawing2DHandle } from './components/Drawing2D'
 import TextInput from './components/TextInput'
 import { FIXED_PARAMS, VariableParams, defaultVariableParams } from './constants'
@@ -8,10 +8,13 @@ function App() {
   const [params, setParams] = useState<VariableParams>(defaultVariableParams)
   const [viewMode, setViewMode] = useState<'2d' | '3d'>('2d')
   const drawing2DRef = useRef<Drawing2DHandle>(null)
+  const moldPreviewRef = useRef<MoldPreviewHandle>(null)
 
   const handleExport = () => {
     if (viewMode === '2d' && drawing2DRef.current) {
       drawing2DRef.current.exportPNG()
+    } else if (viewMode === '3d' && moldPreviewRef.current && params.text) {
+      moldPreviewRef.current.exportHTML(params.text)
     }
   }
 
@@ -221,14 +224,15 @@ function App() {
           <h3 className="text-sm font-medium text-gray-400 mb-2">出力</h3>
           <button
             onClick={handleExport}
-            className="w-full py-2 px-4 bg-green-600 hover:bg-green-500 text-white rounded-lg font-medium transition-colors"
+            disabled={!params.text}
+            className="w-full py-2 px-4 bg-green-600 hover:bg-green-500 text-white rounded-lg font-medium transition-colors disabled:bg-gray-600 disabled:cursor-not-allowed"
           >
-            {viewMode === '2d' ? 'PNG画像をダウンロード' : '3Dモデル（準備中）'}
+            {viewMode === '2d' ? 'PNG画像をダウンロード' : 'HTML形式で3Dモデルを保存'}
           </button>
           <p className="text-xs text-gray-500 mt-2">
             {viewMode === '2d'
               ? '2D図面をPNG画像として保存します'
-              : 'STL形式での出力は今後対応予定'}
+              : 'ブラウザでくるくる回せるHTMLファイルを生成します'}
           </p>
         </div>
 
@@ -242,7 +246,7 @@ function App() {
         {viewMode === '2d' ? (
           <Drawing2D ref={drawing2DRef} params={params} />
         ) : (
-          <MoldPreview params={params} />
+          <MoldPreview ref={moldPreviewRef} params={params} />
         )}
       </div>
     </div>

@@ -2,6 +2,18 @@
  * 3Dメッシュ生成用の定数
  */
 
+/** 土台（ベース板）の寸法 */
+export const BASE_DIMENSIONS = {
+  /** 幅（mm） - キャビティ寸法に基づく */
+  width: 57.90,
+  /** 長さ（mm） - キャビティ寸法に基づく */
+  length: 97.30,
+  /** 厚み（mm） - 土台の厚さ */
+  depth: 19.0,
+  /** コーナー半径（mm） - キャビティのコーナーR */
+  cornerRadius: 3.60,
+} as const
+
 /** スティック（棒）の寸法 */
 export const STICK_DIMENSIONS = {
   /** 幅（mm） */

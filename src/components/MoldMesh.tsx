@@ -2,6 +2,7 @@ import { useMemo, useState, useEffect } from 'react'
 import * as THREE from 'three'
 import { VariableParams, FIXED_PARAMS } from '../constants'
 import {
+  BASE_DIMENSIONS,
   STICK_DIMENSIONS,
   ICE_EXTRUDE_SETTINGS,
   STICK_OFFSET_Y,
@@ -61,9 +62,9 @@ export default function MoldMesh({ params }: MoldMeshProps) {
   }, [])
 
   // 文字の形でアイス本体を作成
-  const { iceGeometries, bottomY } = useMemo(() => {
+  const { iceGeometries, baseGeometries, bottomY } = useMemo(() => {
     if (!font || !text || text.trim().length === 0) {
-      return { iceGeometries: [], bottomY: 0 }
+      return { iceGeometries: [], baseGeometries: [], bottomY: 0 }
     }
 
     try {
@@ -77,9 +78,12 @@ export default function MoldMesh({ params }: MoldMeshProps) {
       const spacing = fontSize * TEXT_SIZE.spacingFactor
       const totalHeight = (charCount - 1) * spacing
 
-      // 各文字の位置を計算
+      // 各文字の位置を計算し、全体のバウンディングボックスを取得
       const charPositions: { x: number; y: number }[] = []
+      let minX = Infinity
+      let maxX = -Infinity
       let minY = Infinity
+      let maxY = -Infinity
 
       chars.forEach((char, index) => {
         const bounds = getTextBounds(font, char, fontSize)
@@ -87,13 +91,21 @@ export default function MoldMesh({ params }: MoldMeshProps) {
         const centerY = bounds.yMin + bounds.height / 2
         const yPos = totalHeight / 2 - index * spacing
 
-        charPositions.push({
-          x: -centerX + offsetX,
-          y: -centerY + yPos + offsetY
-        })
+        const posX = -centerX + offsetX
+        const posY = -centerY + yPos + offsetY
 
-        const charBottomY = yPos - bounds.height / 2
-        if (charBottomY < minY) minY = charBottomY
+        charPositions.push({ x: posX, y: posY })
+
+        // バウンディングボックスの更新
+        const charMinX = posX + bounds.xMin
+        const charMaxX = posX + bounds.xMin + bounds.width
+        const charMinY = posY + bounds.yMin
+        const charMaxY = posY + bounds.yMin + bounds.height
+
+        if (charMinX < minX) minX = charMinX
+        if (charMaxX > maxX) maxX = charMaxX
+        if (charMinY < minY) minY = charMinY
+        if (charMaxY > maxY) maxY = charMaxY
       })
 
       let shapes: THREE.Shape[]
@@ -144,24 +156,51 @@ export default function MoldMesh({ params }: MoldMeshProps) {
       const geometries: THREE.ExtrudeGeometry[] = []
       shapes.forEach((shape) => {
         const geometry = new THREE.ExtrudeGeometry(shape, {
-          depth: F.totalHeight,
+          depth: F.depthText, // 3mm（文字の厚み）
           ...ICE_EXTRUDE_SETTINGS,
         })
         geometries.push(geometry)
       })
 
-      return { iceGeometries: geometries, bottomY: minY + offsetY }
+      // 土台のサイズを計算（文字の輪郭を縁取った形）
+      // 文字全体を統合して、8mm膨張させる
+      const baseMargin = 8 // 余白8mm（文字を一回り大きく）
+      const baseShapes = createFilledMultiCharShapes(
+        font,
+        chars,
+        fontSize,
+        charPositions,
+        baseMargin, // オフセット距離
+        50 // minHoleArea
+      )
+
+      // 土台ジオメトリを生成（19mm厚）
+      const baseDepth = BASE_DIMENSIONS.depth // 19mm
+      const baseGeometries: THREE.ExtrudeGeometry[] = []
+      baseShapes.forEach((shape) => {
+        const geometry = new THREE.ExtrudeGeometry(shape, {
+          depth: baseDepth,
+          bevelEnabled: false, // 土台はベベルなし
+        })
+        baseGeometries.push(geometry)
+      })
+
+      return {
+        iceGeometries: geometries,
+        baseGeometries: baseGeometries,
+        bottomY: minY
+      }
     } catch (err) {
       console.error('Ice geometry generation failed:', err)
-      return { iceGeometries: [], bottomY: 0 }
+      return { iceGeometries: [], baseGeometries: [], bottomY: 0 }
     }
   }, [font, text, textScale, offsetX, offsetY, fillText, fillOffset])
 
   return (
     <group rotation={[-Math.PI / 2, 0, rotation * Math.PI / 180]}>
-      {/* アイス本体（文字の形） */}
-      {iceGeometries.map((geometry, index) => (
-        <mesh key={index} geometry={geometry} position={[0, 0, 0]}>
+      {/* 土台（文字の輪郭に沿った形） - Z=0mm（底面） */}
+      {baseGeometries.map((geometry, index) => (
+        <mesh key={`base-${index}`} geometry={geometry} position={[0, 0, 0]}>
           <meshStandardMaterial
             color={MESH_COLORS.ice}
             {...MATERIAL_SETTINGS.ice}
@@ -169,12 +208,22 @@ export default function MoldMesh({ params }: MoldMeshProps) {
         </mesh>
       ))}
 
-      {/* 棒（スティック）- 文字の下から */}
+      {/* アイス本体（文字の形） - Z=19mm（土台の上） */}
+      {iceGeometries.map((geometry, index) => (
+        <mesh key={`text-${index}`} geometry={geometry} position={[0, 0, BASE_DIMENSIONS.depth]}>
+          <meshStandardMaterial
+            color={MESH_COLORS.ice}
+            {...MATERIAL_SETTINGS.ice}
+          />
+        </mesh>
+      ))}
+
+      {/* 棒（スティック）- 文字の下、土台の底面から */}
       {iceGeometries.length > 0 && (
         <mesh
           geometry={stickGeometry}
-          position={[0, bottomY - STICK_OFFSET_Y, F.totalHeight / 2]}
-          rotation={[-Math.PI / 2, 0, 0]}
+          position={[0, bottomY - STICK_OFFSET_Y, -STICK_DIMENSIONS.length / 2]}
+          rotation={[Math.PI / 2, 0, 0]}
         >
           <meshStandardMaterial color={MESH_COLORS.stick} {...MATERIAL_SETTINGS.stick} />
         </mesh>
